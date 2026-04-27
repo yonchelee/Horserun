@@ -52,8 +52,11 @@ export function ensureKakaoReady() {
 export async function loginWithKakao() {
   await ensureKakaoReady();
   return new Promise((resolve, reject) => {
+    // Don't pin a specific scope here. If we list a scope that isn't
+    // enabled as a consent item in the Kakao Developers app, the popup
+    // immediately fails with "허용되지 않은 동의 항목". Letting Kakao use
+    // the project's configured defaults is more robust.
     window.Kakao.Auth.login({
-      scope: 'profile_nickname,profile_image',
       success: async (auth) => {
         try {
           const me = await window.Kakao.API.request({ url: '/v2/user/me' });

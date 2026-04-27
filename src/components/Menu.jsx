@@ -26,8 +26,18 @@ export default function Menu({ onSubmit }) {
       const identity = await loginWithKakao();
       onSubmit(identity);
     } catch (err) {
-      console.error(err);
-      setError('카카오 로그인에 실패했어요. 잠시 후 다시 시도해주세요.');
+      console.error('[kakao login error]', err);
+      // Surface whatever Kakao actually says, in priority order:
+      //   - error_description (OAuth-style failures, e.g. 도메인 미허용)
+      //   - msg (Kakao SDK runtime failures)
+      //   - message (generic JS Error)
+      //   - JSON dump (fallback so we never swallow the cause)
+      const reason =
+        err?.error_description ||
+        err?.msg ||
+        err?.message ||
+        (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      setError(`카카오 로그인 실패 — ${reason}`);
     } finally {
       setBusy(false);
     }
