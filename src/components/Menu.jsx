@@ -7,15 +7,16 @@ export default function Menu({ onStart, playerName, setPlayerName }) {
         <div className="mb-5 flex items-center gap-2 text-ink-400">
           <Sparkles size={14} />
           <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">
-            Horserun
+            Live race
           </span>
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-ink-900">
-          L / R Rhythm Race
+          Horse run
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-400">
-          Alternate left and right taps to gallop. Same-side taps don't add
-          speed. Pace yourself — empty stamina means a 3-second overheat.
+          Alternate left and right taps to gallop. Land each tap inside the
+          green sweet zone (220–320ms apart) for full speed. Same-side taps
+          add nothing.
         </p>
 
         <label className="mt-6 block">
@@ -42,8 +43,8 @@ export default function Menu({ onStart, playerName, setPlayerName }) {
 
         <div className="mt-5 grid grid-cols-3 gap-2 text-center text-[11px] text-ink-400">
           <Tip k="L → R" v="Alternate" />
-          <Tip k="Stamina" v="Pace it" />
-          <Tip k="0%" v="Overheat" />
+          <Tip k="220–320ms" v="Sweet zone" />
+          <Tip k="PERFECT" v="Full speed" />
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import Horse from './Horse.jsx';
 import { COLOR_MAP } from './colors.js';
 
-export default function Track({ horses, now }) {
+export default function Track({ horses }) {
   const sortedByLane = [...horses].sort((a, b) => a.lane - b.lane);
 
   return (
@@ -48,7 +48,7 @@ export default function Track({ horses, now }) {
                   {horse.lane + 1}
                 </span>
               </div>
-              <Horse horse={horse} isPlayer={isPlayer} now={now} />
+              <Horse horse={horse} isPlayer={isPlayer} />
             </div>
           );
         })}

@@ -27,11 +27,11 @@ const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet'];
 // band so races don't feel uniform. Erratic deliberately leaks outside
 // the band — it's the "messy" rival.
 const PERSONALITIES = [
-  { id: 'sprinter', baseInterval: 235, jitter: 0.12, restThreshold: 25, restProb: 0.45 },
-  { id: 'pacer', baseInterval: 305, jitter: 0.08, restThreshold: 55, restProb: 0.6 },
-  { id: 'steady', baseInterval: 270, jitter: 0.12, restThreshold: 40, restProb: 0.5 },
-  { id: 'erratic', baseInterval: 260, jitter: 0.4, restThreshold: 30, restProb: 0.4 },
-  { id: 'closer', baseInterval: 290, jitter: 0.1, restThreshold: 45, restProb: 0.65 },
+  { id: 'sprinter', baseInterval: 235, jitter: 0.12 },
+  { id: 'pacer', baseInterval: 305, jitter: 0.08 },
+  { id: 'steady', baseInterval: 270, jitter: 0.12 },
+  { id: 'erratic', baseInterval: 260, jitter: 0.4 },
+  { id: 'closer', baseInterval: 290, jitter: 0.1 },
 ];
 
 function shuffled(arr) {
@@ -45,35 +45,22 @@ function shuffled(arr) {
 
 function tickAI(horse, dt, now) {
   if (horse.finished) return;
-  if (now < horse.overheatUntil) return;
 
   horse.aiNextTapIn -= dt * 1000;
   if (horse.aiNextTapIn > 0) return;
 
   const p = horse.personality;
-  const lowStamina = horse.stamina < p.restThreshold;
 
-  // "Closer" rests less in the final stretch instead of cranking up
-  // tap rate — the sweet-spot rule means faster taps would only cost
-  // them speed efficiency, so the late-game push is now about staying
-  // on cadence longer rather than mashing.
+  // "Closer" tightens its precision in the final stretch — jitter drops
+  // so it's more likely to stay inside the sweet zone when it matters.
   const lateGame = p.id === 'closer' && horse.position > 70;
-  const restProb = lateGame ? p.restProb * 0.4 : p.restProb;
-
-  if (lowStamina && Math.random() < restProb) {
-    horse.aiNextTapIn = 320 + Math.random() * 260;
-    return;
-  }
+  const effectiveJitter = lateGame ? p.jitter * 0.4 : p.jitter;
 
   const newSide = horse.lastSide === 'L' ? 'R' : 'L';
   applyTap(horse, newSide, now);
 
-  const j = 1 - p.jitter + Math.random() * p.jitter * 2;
-  // When low on stamina, AIs intentionally drift to the slow edge of
-  // the sweet zone (~310ms) so they don't chain quick taps into an
-  // overheat. Still inside the band → still 'perfect' gain.
-  const staminaStretch = lowStamina ? 1.15 : 1;
-  horse.aiNextTapIn = p.baseInterval * j * staminaStretch;
+  const j = 1 - effectiveJitter + Math.random() * effectiveJitter * 2;
+  horse.aiNextTapIn = p.baseInterval * j;
 }
 
 export function createMockNetwork({ playerName = 'YOU', onState, onFinish }) {

@@ -1,6 +1,5 @@
-import { ChevronLeft, ChevronRight, Flame, Zap, Music } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Zap, Music } from 'lucide-react';
 import {
-  MAX_STAMINA,
   MAX_SPEED,
   SWEET_MIN_MS,
   SWEET_MAX_MS,
@@ -14,10 +13,7 @@ const GAUGE_MAX_MS = 700;
 export default function Controls({ player, onTap, disabled, now }) {
   if (!player) return null;
 
-  const overheating = player.overheatUntil > now;
-  const staminaPct = Math.max(0, Math.min(100, (player.stamina / MAX_STAMINA) * 100));
   const speedPct = Math.max(0, Math.min(100, (player.speed / MAX_SPEED) * 100));
-  const overheatRemaining = Math.max(0, player.overheatUntil - now) / 1000;
 
   // Quality only "lives" for ~700ms after a tap, so the badge fades
   // instead of sticking forever.
@@ -27,7 +23,7 @@ export default function Controls({ player, onTap, disabled, now }) {
 
   const handlePress = (side) => (e) => {
     e.preventDefault();
-    if (disabled || overheating) {
+    if (disabled) {
       if (navigator.vibrate) navigator.vibrate([4, 30, 4]);
       return;
     }
@@ -35,7 +31,7 @@ export default function Controls({ player, onTap, disabled, now }) {
     onTap(side);
   };
 
-  const dimmed = disabled || overheating;
+  const dimmed = disabled;
   const lastSide = player.lastSide;
 
   // Pulse the last-tapped button on PERFECT taps so the player gets
@@ -45,21 +41,8 @@ export default function Controls({ player, onTap, disabled, now }) {
 
   return (
     <div className="flex h-full flex-col gap-2">
-      {/* Stamina + rhythm + speed bars */}
+      {/* Rhythm + speed bars */}
       <div className="flex items-center gap-3 rounded-2xl border border-ink-100 bg-white px-3 py-2 shadow-sm">
-        <Meter
-          icon={<Flame size={14} className={overheating ? 'text-red-500' : 'text-ink-400'} />}
-          value={Math.round(staminaPct) + '%'}
-          barClass={
-            overheating
-              ? 'bg-red-500'
-              : staminaPct < 30
-                ? 'bg-amber-500'
-                : 'bg-emerald-500'
-          }
-          fillPct={staminaPct}
-        />
-
         <RhythmGauge
           intervalMs={lastInterval}
           quality={qualityKind}
@@ -71,12 +54,6 @@ export default function Controls({ player, onTap, disabled, now }) {
           barClass="bg-sky-500"
           fillPct={speedPct}
         />
-
-        {overheating && (
-          <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
-            Overheat {overheatRemaining.toFixed(1)}s
-          </span>
-        )}
       </div>
 
       {/* L / R buttons */}

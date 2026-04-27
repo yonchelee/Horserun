@@ -144,7 +144,7 @@ function GameScreen({ snapshot, startedAt, phase, now, onTap, children }) {
 
       {/* Track */}
       <div className="relative min-h-0 flex-[3]">
-        <Track horses={horses} now={now} />
+        <Track horses={horses} />
         {children}
       </div>
 

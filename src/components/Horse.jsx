@@ -1,11 +1,9 @@
-import { Flame } from 'lucide-react';
 import { COLOR_MAP } from './colors.js';
 import { TRACK_LENGTH } from '../game/engine.js';
 import SpriteHorse from './SpriteHorse.jsx';
 
-export default function Horse({ horse, isPlayer, now }) {
+export default function Horse({ horse, isPlayer }) {
   const c = COLOR_MAP[horse.color] || COLOR_MAP.sky;
-  const overheating = horse.overheatUntil > now;
   const finished = horse.finished;
 
   // Reserve 8% of track width on the right for the finish line + horse icon.
@@ -40,7 +38,7 @@ export default function Horse({ horse, isPlayer, now }) {
                 lane={horse.lane}
                 speed={horse.speed}
                 size={56}
-                paused={overheating || finished}
+                paused={finished}
                 dimmed={finished}
               />
 
@@ -50,15 +48,6 @@ export default function Horse({ horse, isPlayer, now }) {
               >
                 {horse.lane + 1}
               </span>
-
-              {overheating && (
-                <>
-                  <span className="pointer-events-none absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 ring-2 ring-white">
-                    <Flame size={12} className="text-white" />
-                  </span>
-                  <span className="pointer-events-none absolute -bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-sky-400 animate-sweat" />
-                </>
-              )}
             </span>
           </div>
 
