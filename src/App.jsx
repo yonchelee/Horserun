@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Timer, Users } from 'lucide-react';
+import { Timer, Users, Wifi, WifiOff } from 'lucide-react';
 
 import Menu from './components/Menu.jsx';
 import Lobby from './components/Lobby.jsx';
@@ -9,122 +9,120 @@ import Controls from './components/Controls.jsx';
 import Results from './components/Results.jsx';
 import RotatePrompt from './components/RotatePrompt.jsx';
 
-import { createMockNetwork } from './game/network.js';
-import { rankHorses } from './game/engine.js';
+import { createNetwork, isMultiplayerEnabled } from './game/network.js';
 
 export default function App() {
-  // menu (login) → lobby (waiting room) → racing → finished
-  const [phase, setPhase] = useState('menu');
-  const [playerName, setPlayerName] = useState('Rider');
+  // Local UI state (unrelated to server phase):
+  //  - identity: who am I (kakao or guest); null until logged in
+  //  - snapshot: latest snapshot from network (null until first emit)
+  //  - finalRanking: snapshot of the ranking + race times when finished
+  const [identity, setIdentity] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
-  const [ranking, setRanking] = useState([]);
+  const [finalResult, setFinalResult] = useState(null);
+  const [networkError, setNetworkError] = useState(null);
 
   const netRef = useRef(null);
-  const startedAtRef = useRef(0);
-  const finishTimerRef = useRef(null);
-
-  // The network's onState push (60fps during racing) drives re-renders.
-  // Outside racing we don't animate, so a fixed `now` snapshot is fine.
   const now = performance.now();
 
-  useEffect(() => {
-    return () => {
-      netRef.current?.destroy();
-      if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
-    };
-  }, []);
+  useEffect(() => () => netRef.current?.destroy(), []);
 
-  const handleJoinLobby = () => {
-    setPhase('lobby');
-  };
+  const handleLogin = (id) => {
+    setIdentity(id);
+    setNetworkError(null);
+    setFinalResult(null);
 
-  // Called by Lobby once the 10s post-everyone-ready countdown ends.
-  const handleLobbyStart = (roster) => {
     netRef.current?.destroy();
-    const net = createMockNetwork({
-      playerName: (playerName || '').trim() || 'You',
-      roster,
-      onState: (s) => setSnapshot(s),
-      onFinish: (rank) => {
-        setRanking(rank);
-        // Brief beat so the player sees the last horse cross.
-        finishTimerRef.current = setTimeout(() => setPhase('finished'), 900);
+    const net = createNetwork({
+      identity: id,
+      onState: (state) => {
+        setSnapshot(state);
+        // When the server cycles back to lobby after a race, clear the
+        // stale results screen.
+        if (state.phase === 'lobby') setFinalResult(null);
+      },
+      onFinished: ({ ranking, startedAt, finishedAt }) => {
+        const myId = netRef.current?.myConnId?.() || null;
+        setFinalResult({
+          ranking: ranking.map((h) => ({
+            ...h,
+            isPlayer: myId ? h.connId === myId : !h.isBot,
+          })),
+          startedAt,
+          finishedAt,
+        });
+      },
+      onRejected: (reason) => {
+        setNetworkError(reason || 'Connection rejected');
       },
     });
     netRef.current = net;
-    setRanking([]);
-    startedAtRef.current = performance.now();
-    net.start();
-    setPhase('racing');
   };
 
-  const handleLeaveLobby = () => {
-    setPhase('menu');
-  };
-
-  const handlePlayAgain = () => {
+  const handleLogout = () => {
     netRef.current?.destroy();
     netRef.current = null;
+    setIdentity(null);
     setSnapshot(null);
-    setRanking([]);
-    setPhase('lobby');
+    setFinalResult(null);
   };
 
-  const handleTap = (side) => netRef.current?.sendTap(side);
+  const handleReady = (ready) => {
+    netRef.current?.setReady(ready);
+  };
 
-  // Safety net: if all horses haven't finished after a long stall,
-  // force the results screen using current rankings.
-  useEffect(() => {
-    if (phase !== 'racing') return;
-    const t = setTimeout(() => {
-      if (snapshot?.horses) {
-        setRanking(rankHorses(snapshot.horses));
-        setPhase('finished');
-      }
-    }, 120_000);
-    return () => clearTimeout(t);
-  }, [phase, snapshot]);
+  const handleTap = (side) => {
+    netRef.current?.sendTap(side);
+  };
 
+  const phase = snapshot?.phase;
+
+  // ── Render ─────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 flex flex-col bg-ink-50 text-ink-900 font-sans">
       <RotatePrompt />
 
-      {phase === 'menu' && (
+      {!identity && (
         <div className="flex h-full w-full flex-col p-3">
-          <Menu
-            onStart={handleJoinLobby}
-            playerName={playerName}
-            setPlayerName={setPlayerName}
-          />
+          <Menu onSubmit={handleLogin} />
         </div>
       )}
 
-      {phase === 'lobby' && (
+      {identity && phase !== 'racing' && phase !== 'finished' && (
         <div className="flex h-full w-full flex-col p-3">
-          <Lobby
-            playerName={playerName}
-            onStart={handleLobbyStart}
-            onLeave={handleLeaveLobby}
-          />
+          {networkError ? (
+            <ConnectionError reason={networkError} onLeave={handleLogout} />
+          ) : !snapshot ? (
+            <ConnectingScreen multiplayer={isMultiplayerEnabled()} onLeave={handleLogout} />
+          ) : (
+            <Lobby
+              snapshot={snapshot}
+              myConnId={netRef.current?.myConnId?.() || null}
+              identity={identity}
+              serverNow={() => netRef.current?.serverNow?.() ?? Date.now()}
+              onReady={handleReady}
+              onLeave={handleLogout}
+            />
+          )}
         </div>
       )}
 
-      {phase === 'racing' && snapshot && (
+      {identity && phase === 'racing' && snapshot && (
         <GameScreen
           snapshot={snapshot}
-          startedAt={startedAtRef.current}
-          phase={phase}
+          startedAt={snapshot.raceStartedAt}
+          myConnId={netRef.current?.myConnId?.() || null}
+          serverNow={() => netRef.current?.serverNow?.() ?? Date.now()}
           now={now}
           onTap={handleTap}
         />
       )}
 
-      {phase === 'finished' && (
+      {identity && phase === 'finished' && finalResult && (
         <div className="flex h-full w-full flex-col p-3">
           <Results
-            ranking={ranking}
-            startedAt={startedAtRef.current}
-            onPlayAgain={handlePlayAgain}
+            ranking={finalResult.ranking}
+            startedAt={finalResult.startedAt}
+            onPlayAgain={() => netRef.current?.setReady(false)}
           />
         </div>
       )}
@@ -132,15 +130,71 @@ export default function App() {
   );
 }
 
-function GameScreen({ snapshot, startedAt, phase, now, onTap }) {
-  const horses = snapshot.horses;
+function ConnectingScreen({ multiplayer, onLeave }) {
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <div className="flex flex-col items-center gap-3 rounded-3xl border border-ink-100 bg-white px-6 py-7 text-center shadow-xl">
+        <Wifi className="animate-pulse text-ink-400" />
+        <div>
+          <div className="text-base font-semibold text-ink-900">
+            {multiplayer ? 'Connecting to lobby…' : 'Setting up race…'}
+          </div>
+          <div className="mt-1 text-xs text-ink-400">
+            {multiplayer
+              ? 'Looking for other riders on the server.'
+              : 'Solo mode — playing against bots.'}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onLeave}
+          className="mt-2 rounded-full bg-ink-50 px-3 py-1 text-xs font-medium text-ink-400 hover:bg-ink-100"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConnectionError({ reason, onLeave }) {
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <div className="flex max-w-sm flex-col items-center gap-3 rounded-3xl border border-red-100 bg-white px-6 py-7 text-center shadow-xl">
+        <WifiOff className="text-red-500" />
+        <div>
+          <div className="text-base font-semibold text-ink-900">
+            Couldn't join the lobby
+          </div>
+          <div className="mt-1 text-xs text-ink-400">{reason}</div>
+        </div>
+        <button
+          type="button"
+          onClick={onLeave}
+          className="rounded-full bg-ink-900 px-4 py-2 text-xs font-semibold text-white"
+        >
+          Back to login
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GameScreen({ snapshot, startedAt, myConnId, serverNow, now, onTap }) {
+  // Stamp `isPlayer` on each horse from the connId so children that
+  // were already written against the old single-player API (Track,
+  // Horse, Leaderboard) keep working.
+  const horses = snapshot.horses.map((h) => ({
+    ...h,
+    isPlayer: myConnId ? h.connId === myConnId : !h.isBot,
+  }));
   const player = horses.find((h) => h.isPlayer);
-  const elapsed =
-    phase === 'racing' ? Math.max(0, (now - startedAt) / 1000) : 0;
+  // Use serverNow to keep the timer in sync across all clients.
+  const elapsed = startedAt ? Math.max(0, (serverNow() - startedAt) / 1000) : 0;
+  const racerCount = horses.length;
 
   return (
     <div className="relative flex h-full w-full flex-col gap-2 p-2">
-      {/* Top status bar */}
       <div className="flex shrink-0 items-center gap-2 px-1 text-[11px] text-ink-400">
         <div className="flex items-center gap-1.5 rounded-full border border-ink-100 bg-white px-2.5 py-1 shadow-sm">
           <Timer size={12} />
@@ -150,32 +204,42 @@ function GameScreen({ snapshot, startedAt, phase, now, onTap }) {
         </div>
         <div className="flex items-center gap-1.5 rounded-full border border-ink-100 bg-white px-2.5 py-1 shadow-sm">
           <Users size={12} />
-          <span className="font-medium text-ink-900">5 racers</span>
+          <span className="font-medium text-ink-900">{racerCount} racers</span>
         </div>
         <div className="ml-auto rounded-full bg-ink-900 px-2.5 py-1 font-semibold uppercase tracking-wider text-white">
           Live
         </div>
       </div>
 
-      {/* Track */}
       <div className="relative min-h-0 flex-[3]">
         <Track horses={horses} />
       </div>
 
-      {/* Leaderboard */}
       <div className="h-10 shrink-0">
         <Leaderboard horses={horses} />
       </div>
 
-      {/* Controls */}
       <div className="min-h-0 flex-[2]">
         <Controls
-          player={player}
+          player={player ? withMockFlags(player) : null}
           onTap={onTap}
-          disabled={phase !== 'racing'}
+          disabled={!player}
           now={now}
         />
       </div>
     </div>
   );
+}
+
+// The Controls component reads `qualityUntil` against `performance.now()`,
+// but our snapshot's qualityUntil is a Date.now()-based wall clock. Bridge
+// the two by translating relative to the player's local clock at render.
+function withMockFlags(p) {
+  return {
+    ...p,
+    overheatUntil: 0, // legacy, never used now
+    qualityUntil: p.qualityUntil
+      ? performance.now() + (p.qualityUntil - Date.now())
+      : 0,
+  };
 }
