@@ -46,24 +46,27 @@ export default function Menu({ onSubmit }) {
   return (
     <div className="flex h-full w-full items-center justify-center overflow-y-auto py-4">
       <div className="w-full max-w-md overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-xl">
-        {/* Hero — full-bleed image at the top of the card. The image
-            already contains the HORSERUN logo + tagline, so we drop
-            the duplicate text title and keep only the small "Live
-            race" eyebrow below for context. */}
-        <div className="relative aspect-[1080/875] w-full bg-ink-100">
-          <img
-            src="/login-hero.jpg"
-            alt="Horserun"
-            className="h-full w-full object-cover"
-            loading="eager"
-            decoding="async"
-          />
-          {/* Soft fade into the card body so the photo doesn't
-              hard-cut against the white form. */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-b from-transparent to-white" />
-        </div>
+        {/* Hero — full image at top, with a CSS mask fading the
+            bottom into transparency. The image is rendered at its
+            natural aspect (block w-full) so every detail of the
+            HORSERUN logo + horses is visible, while the lower
+            portion gradually disappears into the white card body
+            so the form area underneath sits on clean white. */}
+        <img
+          src="/login-hero.jpg"
+          alt="Horserun"
+          className="block w-full select-none"
+          loading="eager"
+          decoding="async"
+          style={{
+            WebkitMaskImage:
+              'linear-gradient(to bottom, black 0%, black 55%, transparent 100%)',
+            maskImage:
+              'linear-gradient(to bottom, black 0%, black 55%, transparent 100%)',
+          }}
+        />
 
-        <div className="px-6 pb-7 pt-5">
+        <div className="px-6 pb-7 pt-3">
           <div className="mb-3 flex items-center gap-2 text-ink-400">
             <Sparkles size={14} />
             <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">
