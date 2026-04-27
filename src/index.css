@@ -26,3 +26,15 @@ button {
 ::-webkit-scrollbar {
   display: none;
 }
+
+/* Sprite-sheet gallop animation. The sheet is 8 horizontal frames,
+   so background-size is set to 800% on the SpriteHorse element and
+   we shift the visible window across each frame in 8 discrete steps. */
+@keyframes horseGallop {
+  from {
+    background-position-x: 0%;
+  }
+  to {
+    background-position-x: -800%;
+  }
+}

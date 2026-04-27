@@ -1,12 +1,12 @@
 import { Flame } from 'lucide-react';
 import { COLOR_MAP } from './colors.js';
 import { TRACK_LENGTH } from '../game/engine.js';
+import SpriteHorse from './SpriteHorse.jsx';
 
 export default function Horse({ horse, isPlayer, now }) {
   const c = COLOR_MAP[horse.color] || COLOR_MAP.sky;
   const overheating = horse.overheatUntil > now;
   const finished = horse.finished;
-  const moving = horse.speed > 0.6 && !overheating;
 
   // Reserve 8% of track width on the right for the finish line + horse icon.
   const pct = (horse.position / TRACK_LENGTH) * 92;
@@ -18,35 +18,44 @@ export default function Horse({ horse, isPlayer, now }) {
         style={{
           transform: `translateX(${pct}%)`,
           transition: 'transform 80ms linear',
-          paddingLeft: '8px',
+          paddingLeft: '4px',
         }}
       >
-        <div className="flex items-center gap-2">
-          <div
-            className={[
-              'relative flex h-9 w-9 items-center justify-center rounded-full',
-              c.bg,
-              'shadow-lg',
-              c.shadow,
-              isPlayer ? 'ring-4 ring-white' : 'ring-2 ring-white/70',
-              moving ? 'animate-gallop' : '',
-              finished ? 'opacity-90' : '',
-            ].join(' ')}
-          >
-            <span className="text-xl leading-none" style={{ filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.15))' }}>
-              🐎
-            </span>
-
-            {overheating && (
-              <>
-                <span className="pointer-events-none absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 ring-2 ring-white">
-                  <Flame size={12} className="text-white" />
-                </span>
-                <span
-                  className="pointer-events-none absolute -bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-sky-400 animate-sweat"
-                />
-              </>
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex items-center justify-center">
+            {/* Soft player highlight under the sprite */}
+            {isPlayer && (
+              <span
+                className="pointer-events-none absolute inset-0 -m-1 rounded-full bg-white/70 shadow-md ring-2 ring-ink-900/20"
+                style={{ filter: 'blur(0.5px)' }}
+              />
             )}
+
+            <span className="relative">
+              <SpriteHorse
+                lane={horse.lane}
+                speed={horse.speed}
+                size={56}
+                paused={overheating || finished}
+                dimmed={finished}
+              />
+
+              {/* Lane number bib (mirrors the "1" patch on the sprite). */}
+              <span
+                className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 rounded-full ${c.bg} px-1.5 py-px text-[9px] font-bold leading-tight text-white shadow ring-1 ring-white/80`}
+              >
+                {horse.lane + 1}
+              </span>
+
+              {overheating && (
+                <>
+                  <span className="pointer-events-none absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 ring-2 ring-white">
+                    <Flame size={12} className="text-white" />
+                  </span>
+                  <span className="pointer-events-none absolute -bottom-1 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-sky-400 animate-sweat" />
+                </>
+              )}
+            </span>
           </div>
 
           {isPlayer && !finished && (
@@ -55,7 +64,9 @@ export default function Horse({ horse, isPlayer, now }) {
             </span>
           )}
           {finished && (
-            <span className={`rounded-full ${c.bgSoft} ${c.text} px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider`}>
+            <span
+              className={`rounded-full ${c.bgSoft} ${c.text} px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider`}
+            >
               Done
             </span>
           )}
