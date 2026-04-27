@@ -6,7 +6,14 @@
 // and the UI can fall back to a guest name input.
 
 const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY;
-const SDK_URL = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js';
+// Pinned to v1.43.5 because v2 removed `Kakao.Auth.login()` (the
+// callback-based popup flow) and only offers `Kakao.Auth.authorize()`,
+// which is a redirect-based authorization-code flow that requires a
+// backend to exchange the code for a token (Kakao deliberately does
+// not support implicit flow). Until we add a token-exchange route to
+// the Worker, the v1 SDK remains the simplest path: same API surface
+// our code is written against, popup login, no backend.
+const SDK_URL = 'https://t1.kakaocdn.net/kakao_js_sdk/1.43.5/kakao.min.js';
 
 let readyPromise = null;
 
