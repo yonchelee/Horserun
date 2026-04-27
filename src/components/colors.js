@@ -1,0 +1,48 @@
+// Static map so Tailwind's JIT can see every class string at build time.
+export const COLOR_MAP = {
+  rose: {
+    bg: 'bg-rose-500',
+    bgSoft: 'bg-rose-100',
+    text: 'text-rose-600',
+    border: 'border-rose-300',
+    ring: 'ring-rose-400',
+    shadow: 'shadow-rose-500/40',
+    hex: '#f43f5e',
+  },
+  amber: {
+    bg: 'bg-amber-500',
+    bgSoft: 'bg-amber-100',
+    text: 'text-amber-600',
+    border: 'border-amber-300',
+    ring: 'ring-amber-400',
+    shadow: 'shadow-amber-500/40',
+    hex: '#f59e0b',
+  },
+  emerald: {
+    bg: 'bg-emerald-500',
+    bgSoft: 'bg-emerald-100',
+    text: 'text-emerald-600',
+    border: 'border-emerald-300',
+    ring: 'ring-emerald-400',
+    shadow: 'shadow-emerald-500/40',
+    hex: '#10b981',
+  },
+  sky: {
+    bg: 'bg-sky-500',
+    bgSoft: 'bg-sky-100',
+    text: 'text-sky-600',
+    border: 'border-sky-300',
+    ring: 'ring-sky-400',
+    shadow: 'shadow-sky-500/40',
+    hex: '#0ea5e9',
+  },
+  violet: {
+    bg: 'bg-violet-500',
+    bgSoft: 'bg-violet-100',
+    text: 'text-violet-600',
+    border: 'border-violet-300',
+    ring: 'ring-violet-400',
+    shadow: 'shadow-violet-500/40',
+    hex: '#8b5cf6',
+  },
+};

@@ -1,0 +1,125 @@
+import { ChevronLeft, ChevronRight, Flame, Zap } from 'lucide-react';
+import { MAX_STAMINA, MAX_SPEED } from '../game/engine.js';
+
+export default function Controls({ player, onTap, disabled, now }) {
+  if (!player) return null;
+
+  const overheating = player.overheatUntil > now;
+  const staminaPct = Math.max(0, Math.min(100, (player.stamina / MAX_STAMINA) * 100));
+  const speedPct = Math.max(0, Math.min(100, (player.speed / MAX_SPEED) * 100));
+  const overheatRemaining = Math.max(0, player.overheatUntil - now) / 1000;
+
+  const handlePress = (side) => (e) => {
+    e.preventDefault();
+    if (disabled || overheating) {
+      // Tiny "denied" buzz so the player knows the press was ignored.
+      if (navigator.vibrate) navigator.vibrate([4, 30, 4]);
+      return;
+    }
+    if (navigator.vibrate) navigator.vibrate(12);
+    onTap(side);
+  };
+
+  const dimmed = disabled || overheating;
+  const lastSide = player.lastSide;
+
+  return (
+    <div className="flex h-full flex-col gap-2">
+      {/* Stamina + speed bars */}
+      <div className="flex items-center gap-3 rounded-2xl border border-ink-100 bg-white px-3 py-2 shadow-sm">
+        <div className="flex flex-1 items-center gap-2">
+          <Flame size={14} className={overheating ? 'text-red-500' : 'text-ink-400'} />
+          <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
+            <div
+              className={[
+                'absolute inset-y-0 left-0 rounded-full transition-[width] duration-100',
+                overheating
+                  ? 'bg-red-500'
+                  : staminaPct < 30
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500',
+              ].join(' ')}
+              style={{ width: `${staminaPct}%` }}
+            />
+          </div>
+          <span className="w-9 text-right font-mono text-[11px] text-ink-400">
+            {Math.round(staminaPct)}%
+          </span>
+        </div>
+        <div className="flex flex-1 items-center gap-2">
+          <Zap size={14} className="text-sky-500" />
+          <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-sky-500 transition-[width] duration-100"
+              style={{ width: `${speedPct}%` }}
+            />
+          </div>
+          <span className="w-9 text-right font-mono text-[11px] text-ink-400">
+            {player.speed.toFixed(1)}
+          </span>
+        </div>
+        {overheating && (
+          <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+            Overheat {overheatRemaining.toFixed(1)}s
+          </span>
+        )}
+      </div>
+
+      {/* L / R buttons */}
+      <div className="grid flex-1 grid-cols-2 gap-2">
+        <ControlButton
+          side="L"
+          icon={<ChevronLeft size={56} strokeWidth={2.5} />}
+          onPointerDown={handlePress('L')}
+          dimmed={dimmed}
+          highlight={lastSide === 'L'}
+        />
+        <ControlButton
+          side="R"
+          icon={<ChevronRight size={56} strokeWidth={2.5} />}
+          onPointerDown={handlePress('R')}
+          dimmed={dimmed}
+          highlight={lastSide === 'R'}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ControlButton({ side, icon, onPointerDown, dimmed, highlight }) {
+  return (
+    <button
+      type="button"
+      onPointerDown={onPointerDown}
+      onContextMenu={(e) => e.preventDefault()}
+      className={[
+        'group relative flex h-full items-center justify-center rounded-3xl border text-ink-900 shadow-sm transition-transform',
+        'active:scale-[0.98]',
+        dimmed
+          ? 'border-ink-100 bg-ink-50/70 text-ink-400'
+          : highlight
+            ? 'border-ink-200 bg-white text-ink-900'
+            : 'border-ink-100 bg-white text-ink-900 hover:bg-ink-50',
+      ].join(' ')}
+      style={{ touchAction: 'manipulation' }}
+    >
+      <div className="flex flex-col items-center justify-center gap-1">
+        <span
+          className={[
+            'flex h-16 w-16 items-center justify-center rounded-full',
+            dimmed
+              ? 'bg-ink-100 text-ink-400'
+              : highlight
+                ? 'bg-ink-900 text-white'
+                : 'bg-ink-50 text-ink-900 group-active:bg-ink-900 group-active:text-white',
+          ].join(' ')}
+        >
+          {icon}
+        </span>
+        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-400">
+          Tap {side}
+        </span>
+      </div>
+    </button>
+  );
+}
