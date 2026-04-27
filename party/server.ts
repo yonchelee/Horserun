@@ -200,7 +200,12 @@ export class Main extends Server<Env> {
     this.broadcastState();
   }
 
-  async onMessage(message: string | ArrayBuffer, sender: Connection) {
+  // PartyServer's signature is `onMessage(connection, message)` — note
+  // the order, which differs from the legacy PartyKit `Party.Server`
+  // signature of `(message, sender)`. Getting this wrong silently drops
+  // every message because the `message` arg is actually the connection
+  // object and the early-return on `typeof message !== 'string'` fires.
+  async onMessage(sender: Connection, message: string | ArrayBuffer) {
     this.ensureInit();
     if (typeof message !== 'string') return;
     let msg: any;
@@ -408,14 +413,31 @@ export class Main extends Server<Env> {
 
 // ─── Worker entry point ──────────────────────────────────────────────
 //
-// PartySocket clients connect to /parties/main/<room> — routePartykitRequest
-// matches the kebab-cased class name "main" against our `Main` Durable Object
-// and dispatches the WebSocket upgrade.
+// PartySocket clients connect to /parties/main/<room>. routePartykitRequest
+// matches the kebab-cased class name "main" against our `Main` Durable
+// Object and dispatches the WebSocket upgrade.
+//
+// We tag both connect + plain-request paths with x-partykit-room so the
+// PartyServer base class can populate its internal name even when
+// ctx.id.name isn't auto-exposed by the runtime (some workerd builds
+// leave it undefined for SQLite-backed DOs created via idFromName).
+function tagRoom(req: Request, lobby: { name: string }) {
+  const tagged = new Request(req);
+  tagged.headers.set('x-partykit-room', lobby.name);
+  return tagged;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     return (
-      (await routePartykitRequest(request, env as unknown as Record<string, unknown>)) ||
-      new Response('Not Found', { status: 404 })
+      (await routePartykitRequest(
+        request,
+        env as unknown as Record<string, unknown>,
+        {
+          onBeforeConnect: (req, lobby) => tagRoom(req, lobby),
+          onBeforeRequest: (req, lobby) => tagRoom(req, lobby),
+        },
+      )) || new Response('Not Found', { status: 404 })
     );
   },
 } satisfies ExportedHandler<Env>;
