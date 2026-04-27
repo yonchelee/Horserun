@@ -1,52 +1,57 @@
 # Horserun · 멀티플레이 + 카카오 로그인 셋업
 
-이 문서는 **PartyKit 서버 배포** + **카카오 로그인 등록**을 위한 단계별 가이드입니다. 아무것도 안 해도 게임은 게스트 + 봇으로 동작하지만, 진짜 사람 5명이 같은 방에서 경기하려면 아래 두 가지를 등록해야 합니다.
+PartyKit이 작년 Cloudflare에 인수되면서 `partykit.io`의 호스팅 대시보드가 불안정해졌습니다 (500 MIDDLEWARE_INVOCATION_FAILED 등). 이 프로젝트는 그래서 `partyserver` + `wrangler`로 **Cloudflare Workers에 직접 배포**하도록 구성돼 있습니다. 더 안정적이고 무료 티어도 충분합니다.
 
-## 0. 빠른 요약
+## 0. 환경변수 요약
 
 | 환경변수 | 의미 | 필수? |
 |---|---|---|
-| `VITE_PARTYKIT_HOST` | PartyKit 서버 호스트 (e.g. `horserun.username.partykit.dev`) | 멀티플레이 필요시 |
+| `VITE_PARTYKIT_HOST` | Worker 호스트 (e.g. `horserun.username.workers.dev`) | 멀티플레이 필요시 |
 | `VITE_PARTYKIT_ROOM` | 룸 ID (기본 `main`) | 선택 |
 | `VITE_KAKAO_JS_KEY` | 카카오 디벨로퍼스의 JavaScript Key | 카카오 로그인 필요시 |
 
-`.env.example`를 `.env.local`로 복사한 뒤 채우세요. 둘 다 비워두면 **게스트 + 봇 single-player** 모드로 동작합니다.
+`.env.example`을 `.env.local`로 복사한 뒤 채우세요. 둘 다 비워두면 **게스트 + 봇 single-player** 모드로 동작합니다.
 
-## 1. PartyKit 서버 배포 (실시간 멀티플레이)
+## 1. Cloudflare Workers에 서버 배포
 
 ### 1-1. Cloudflare 계정
-PartyKit은 Cloudflare Workers 위에서 돕니다. https://dash.cloudflare.com 가입 (무료).
+https://dash.cloudflare.com 가입 (무료). 카드 등록 없이 Workers 무료 티어 사용 가능 (월 100,000 요청).
 
-### 1-2. PartyKit 로그인 + 배포
+### 1-2. wrangler 로그인 + 배포
 프로젝트 루트에서:
 ```bash
-npx partykit login    # 브라우저 팝업으로 Cloudflare 인증
+npm install
+npx wrangler login   # 브라우저 OAuth (Cloudflare 계정 인증)
 npm run deploy:party
 ```
 
-배포 성공하면 다음과 비슷한 URL이 출력됩니다:
+`wrangler login`은 PartyKit과 달리 안정적으로 작동합니다. OAuth 콜백이 안전하게 처리됩니다.
+
+배포 성공하면 다음과 같이 출력됩니다:
 ```
-https://horserun.<your-handle>.partykit.dev
+Published horserun (1.23 sec)
+  https://horserun.<your-handle>.workers.dev
+Current Deployment ID: ...
 ```
 
-이걸 `.env.local`의 `VITE_PARTYKIT_HOST`에 넣으세요 (스킴 `https://` 제외하고 호스트만):
+이 URL을 `.env.local`의 `VITE_PARTYKIT_HOST`에 넣으세요 (스킴 `https://` 제외):
 ```
-VITE_PARTYKIT_HOST=horserun.<your-handle>.partykit.dev
+VITE_PARTYKIT_HOST=horserun.<your-handle>.workers.dev
 ```
 
 ### 1-3. 로컬에서 서버 띄우기 (선택)
 배포 없이 로컬에서만 테스트하려면:
 ```bash
 # 터미널 1
-npm run dev:party   # → 127.0.0.1:1999
+npm run dev:party    # → 127.0.0.1:8787
 # 터미널 2
 npm run dev          # → 127.0.0.1:5173
 
 # .env.local
-VITE_PARTYKIT_HOST=127.0.0.1:1999
+VITE_PARTYKIT_HOST=127.0.0.1:8787
 ```
 
-같은 Wi-Fi의 폰에서도 접속 가능 (LAN IP 사용).
+같은 Wi-Fi의 폰에서도 LAN IP로 접속 가능합니다.
 
 ## 2. 카카오 로그인 등록
 
@@ -79,7 +84,7 @@ VITE_KAKAO_JS_KEY=발급받은_JS_KEY
 
 1. Vercel에 GitHub 저장소 import
 2. 환경변수 추가:
-   - `VITE_PARTYKIT_HOST=horserun.<your-handle>.partykit.dev`
+   - `VITE_PARTYKIT_HOST=horserun.<your-handle>.workers.dev`
    - `VITE_PARTYKIT_ROOM=main`
    - `VITE_KAKAO_JS_KEY=...`
 3. 배포 버튼
@@ -98,8 +103,18 @@ VITE_KAKAO_JS_KEY=발급받은_JS_KEY
 
 ## 5. 문제 해결
 
-**"Couldn't join the lobby" 오류** → `VITE_PARTYKIT_HOST` 오타 확인. 서버가 배포됐는지 `npx partykit list`로 확인.
+**`wrangler login` 안 됨** → 브라우저가 안 열리면 출력된 URL을 직접 열어 GitHub로 인증. 같은 머신의 사파리/크롬에서 진행해야 callback이 localhost로 돌아옵니다.
+
+**`Couldn't join the lobby` 오류** → `VITE_PARTYKIT_HOST` 오타 확인. 워커가 살아있는지 `npx wrangler deployments list` 또는 직접 `https://horserun.<handle>.workers.dev/parties/main/main` 접속해서 응답 확인.
+
+**같은 방에서 다른 사람을 못 봄** → 두 사람이 같은 `VITE_PARTYKIT_ROOM`을 쓰는지 확인.
 
 **카카오 로그인 팝업이 뜨자마자 닫힘** → 카카오 디벨로퍼스의 플랫폼 도메인에 현재 접속 도메인이 등록됐는지 확인.
 
-**같은 방에서 다른 사람을 못 봄** → 두 사람이 같은 `VITE_PARTYKIT_ROOM`을 쓰는지 확인. 룸 이름이 다르면 다른 방에 들어갑니다.
+## 6. 비용
+
+- **Cloudflare Workers 무료 티어**: 월 100,000 요청, 30 GB-s CPU 시간. 작은 멀티플레이 게임엔 충분합니다.
+- **Durable Objects**: 무료 티어에 1M req/month 포함.
+- **Vercel 프론트엔드**: 무료 hobby 플랜으로 충분.
+
+소소하게 사람 많이 들어오기 시작하면 Workers Paid 플랜 ($5/월) 검토.

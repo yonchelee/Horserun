@@ -1,5 +1,9 @@
-/// <reference types="@cloudflare/workers-types" />
-import type * as Party from 'partykit/server';
+import {
+  Server,
+  routePartykitRequest,
+  type Connection,
+  type ConnectionContext,
+} from 'partyserver';
 
 // ─── Game constants (mirrored from src/game/engine.js) ─────────────────
 const TRACK_LENGTH = 100;
@@ -16,8 +20,7 @@ const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet'];
 const MAX_PLAYERS = 5;
 const COUNTDOWN_MS = 10_000;
 const POST_RACE_RESET_MS = 15_000;
-const TICK_MS = 1000 / 30; // 30fps server tick is plenty for 5 horses
-const STATE_BROADCAST_EVERY_TICKS = 1; // i.e. 30Hz broadcast
+const TICK_MS = 1000 / 30; // 30Hz authoritative tick
 const BOT_NAMES = ['Comet', 'Shadow', 'Blitz', 'Vortex', 'Phoenix', 'Storm', 'Echo', 'Nova'];
 const BOT_PERSONALITIES = [
   { id: 'sprinter', baseInterval: 235, jitter: 0.12 },
@@ -37,10 +40,8 @@ interface Horse {
   name: string;
   color: string;
   isBot: boolean;
-  // Connection id for human players, null for bots.
   connId: string | null;
   ready: boolean;
-  // Race state
   position: number;
   speed: number;
   lastSide: 'L' | 'R' | null;
@@ -51,11 +52,13 @@ interface Horse {
   lastInterval: number | null;
   lastQuality: Quality;
   qualityUntil: number;
-  // Bot internals
   personality: { id: string; baseInterval: number; jitter: number } | null;
   aiNextTapIn: number;
-  // Identity (kakao or guest)
   profileImage?: string | null;
+}
+
+export interface Env {
+  Main: DurableObjectNamespace<Main>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -139,7 +142,7 @@ function makeBot(lane: number, color: string): Horse {
     color,
     isBot: true,
     connId: null,
-    ready: true, // bots are always ready
+    ready: true,
     position: 0,
     speed: 0,
     lastSide: null,
@@ -156,7 +159,11 @@ function makeBot(lane: number, color: string): Horse {
 }
 
 // ─── Server ───────────────────────────────────────────────────────────
-export default class HorseRunServer implements Party.Server {
+//
+// Class is named `Main` so the kebab-case party namespace is "main",
+// matching PartySocket's default `party` option (so the client doesn't
+// need to specify one explicitly).
+export class Main extends Server<Env> {
   phase: Phase = 'lobby';
   horses: Horse[] = [];
   countdownEndsAt: number | null = null;
@@ -164,18 +171,22 @@ export default class HorseRunServer implements Party.Server {
   finishedAt: number | null = null;
   resetAt: number | null = null;
   lastTickMs: number = 0;
-  loopAlarm: any = null;
+  initialised = false;
 
-  constructor(readonly room: Party.Room) {
+  // Lazy init so we don't re-initialise on every request the DO wakes up
+  // for. Hibernation can drop instance state, so each onConnect /
+  // onMessage entry checks this guard.
+  ensureInit() {
+    if (this.initialised) return;
     this.initLobby();
+    this.initialised = true;
   }
 
   // ── Lifecycle ──
-  async onConnect(conn: Party.Connection) {
-    // Find an empty (bot) lane to swap in for the human.
+  async onConnect(conn: Connection, _ctx: ConnectionContext) {
+    this.ensureInit();
     const botSlot = this.horses.find((h) => h.isBot);
     if (!botSlot) {
-      // Room is full of humans already — reject politely.
       conn.send(JSON.stringify({ type: 'rejected', reason: 'Room is full' }));
       conn.close();
       return;
@@ -184,13 +195,14 @@ export default class HorseRunServer implements Party.Server {
     botSlot.connId = conn.id;
     botSlot.ready = false;
     botSlot.personality = null;
-    botSlot.name = 'Rider'; // identify message will replace this
-    // Tell the client which horse is theirs so the UI can highlight "you".
+    botSlot.name = 'Rider';
     conn.send(JSON.stringify({ type: 'welcome', connId: conn.id }));
     this.broadcastState();
   }
 
-  async onMessage(message: string, sender: Party.Connection) {
+  async onMessage(message: string | ArrayBuffer, sender: Connection) {
+    this.ensureInit();
+    if (typeof message !== 'string') return;
     let msg: any;
     try {
       msg = JSON.parse(message);
@@ -219,9 +231,8 @@ export default class HorseRunServer implements Party.Server {
         break;
       }
       case 'unready': {
-        if (this.phase !== 'lobby') break;
+        if (this.phase !== 'lobby' && this.phase !== 'countdown') break;
         horse.ready = false;
-        // Cancel a started countdown if any human becomes unready.
         if (this.countdownEndsAt) {
           this.countdownEndsAt = null;
           this.phase = 'lobby';
@@ -233,24 +244,24 @@ export default class HorseRunServer implements Party.Server {
         if (this.phase !== 'racing') break;
         if (msg.side !== 'L' && msg.side !== 'R') break;
         applyTap(horse, msg.side, Date.now());
-        // Don't broadcast yet — the tick loop will roll it up.
         break;
       }
     }
   }
 
-  async onClose(conn: Party.Connection) {
+  async onClose(conn: Connection) {
+    this.ensureInit();
     const horse = this.horses.find((h) => h.connId === conn.id);
     if (!horse) return;
-    // Replace the disconnected human with a fresh bot in the same lane.
     const replacement = makeBot(horse.lane, horse.color);
     Object.assign(horse, replacement);
     this.broadcastState();
     this.maybeStartCountdown();
   }
 
-  // ── Game loop driven by storage alarms ──
-  async onAlarm() {
+  // ── Game loop driven by Durable Object alarms ──
+  async alarm() {
+    this.ensureInit();
     const now = Date.now();
     if (this.phase === 'countdown' && this.countdownEndsAt && now >= this.countdownEndsAt) {
       this.startRace();
@@ -262,13 +273,11 @@ export default class HorseRunServer implements Party.Server {
       this.initLobby();
       this.broadcastState();
     }
-    // Keep the alarm chain going until we're idle in lobby.
     if (this.phase !== 'lobby') {
-      await this.room.storage.setAlarm(now + TICK_MS);
+      await this.ctx.storage.setAlarm(Date.now() + TICK_MS);
     }
   }
 
-  // ── State machine helpers ──
   initLobby() {
     this.phase = 'lobby';
     this.countdownEndsAt = null;
@@ -276,13 +285,11 @@ export default class HorseRunServer implements Party.Server {
     this.finishedAt = null;
     this.resetAt = null;
     this.lastTickMs = 0;
-    // Preserve human seats (connId), reset everything else, fill bots.
     const humans = this.horses.filter((h) => !h.isBot && h.connId);
     this.horses = [];
     for (let lane = 0; lane < MAX_PLAYERS; lane++) {
       const human = humans.find((h) => h.lane === lane);
       if (human) {
-        // Reset race state for the human, keep identity.
         this.horses.push({
           ...human,
           ready: false,
@@ -345,7 +352,7 @@ export default class HorseRunServer implements Party.Server {
   }
 
   async scheduleAlarm() {
-    await this.room.storage.setAlarm(Date.now() + TICK_MS);
+    await this.ctx.storage.setAlarm(Date.now() + TICK_MS);
   }
 
   // ── Broadcasting ──
@@ -355,9 +362,6 @@ export default class HorseRunServer implements Party.Server {
       horses: this.horses.map((h) => this.publicHorse(h)),
       countdownEndsAt: this.countdownEndsAt,
       raceStartedAt: this.raceStartedAt,
-      // Server time so clients can compute remaining countdown without
-      // suffering from clock skew (subtract serverNow from countdownEndsAt
-      // and add the local now to translate).
       serverNow: Date.now(),
     };
   }
@@ -385,12 +389,12 @@ export default class HorseRunServer implements Party.Server {
   }
 
   broadcastState() {
-    this.room.broadcast(JSON.stringify({ type: 'state', state: this.buildSnapshot() }));
+    this.broadcast(JSON.stringify({ type: 'state', state: this.buildSnapshot() }));
   }
 
   broadcastFinished() {
     const ranking = rankHorses(this.horses).map((h) => this.publicHorse(h));
-    this.room.broadcast(
+    this.broadcast(
       JSON.stringify({
         type: 'finished',
         ranking,
@@ -401,3 +405,17 @@ export default class HorseRunServer implements Party.Server {
     );
   }
 }
+
+// ─── Worker entry point ──────────────────────────────────────────────
+//
+// PartySocket clients connect to /parties/main/<room> — routePartykitRequest
+// matches the kebab-cased class name "main" against our `Main` Durable Object
+// and dispatches the WebSocket upgrade.
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return (
+      (await routePartykitRequest(request, env as unknown as Record<string, unknown>)) ||
+      new Response('Not Found', { status: 404 })
+    );
+  },
+} satisfies ExportedHandler<Env>;
