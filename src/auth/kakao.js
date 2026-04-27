@@ -67,20 +67,53 @@ export function ensureKakaoReady() {
 export async function loginWithKakao() {
   await ensureKakaoReady();
   return new Promise((resolve, reject) => {
-    // Don't pin a specific scope here. If we list a scope that isn't
-    // enabled as a consent item in the Kakao Developers app, the popup
-    // immediately fails with "허용되지 않은 동의 항목". Letting Kakao use
-    // the project's configured defaults is more robust.
+    // Explicitly ask for nickname + profile image. Without this, v1
+    // SDK uses the app's "default consent" set, which doesn't always
+    // include nickname even if the consent item exists in the
+    // Developers console — so the API returns no nickname and our
+    // caller falls back to a random "Rider123".
+    //
+    // If the user's app doesn't have these consent items enabled,
+    // login fails with "허용되지 않은 동의 항목" and the menu surfaces
+    // that message — which is the right cue to enable them in the
+    // Developers console.
     window.Kakao.Auth.login({
+      scope: 'profile_nickname,profile_image',
       success: async (auth) => {
         try {
           const me = await window.Kakao.API.request({ url: '/v2/user/me' });
+          // Pull nickname / image from every place Kakao might put them.
+          // `kakao_account.profile.*` is the modern path (consent-gated).
+          // `properties.*` is legacy and sometimes still populated.
           const profile = me.kakao_account?.profile ?? {};
+          const props = me.properties ?? {};
+          const nickname =
+            profile.nickname ||
+            props.nickname ||
+            me.kakao_account?.name ||
+            null;
+          const profileImage =
+            profile.thumbnail_image_url ||
+            profile.profile_image_url ||
+            props.thumbnail_image ||
+            props.profile_image ||
+            null;
+
+          if (!nickname) {
+            // Surface what the API actually returned so the developer
+            // (or the user) can see exactly which consent item is
+            // missing instead of getting a silently-randomised name.
+            console.warn(
+              '[kakao] /v2/user/me returned no nickname. Raw response:',
+              me,
+            );
+          }
+
           resolve({
             provider: 'kakao',
             id: String(me.id),
-            name: profile.nickname || `Rider${String(me.id).slice(-3)}`,
-            profileImage: profile.thumbnail_image_url || profile.profile_image_url || null,
+            name: nickname || `Rider${String(me.id).slice(-3)}`,
+            profileImage,
             accessToken: auth.access_token,
           });
         } catch (err) {
