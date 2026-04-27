@@ -63,7 +63,15 @@ function tickAI(horse, dt, now) {
   horse.aiNextTapIn = p.baseInterval * j;
 }
 
-export function createMockNetwork({ playerName = 'YOU', onState, onFinish }) {
+export function createMockNetwork({
+  playerName = 'YOU',
+  // Optional roster passed in from the lobby:
+  // [{ id, lane, isYou, name, color }, ...] (5 entries).
+  // When omitted, a random roster is generated for backward compat.
+  roster = null,
+  onState,
+  onFinish,
+}) {
   let horses = [];
   let raf = null;
   let last = 0;
@@ -71,35 +79,61 @@ export function createMockNetwork({ playerName = 'YOU', onState, onFinish }) {
   let startedAt = 0;
 
   function init() {
-    const personalities = shuffled(PERSONALITIES).slice(0, 4);
-    const aiNames = shuffled(HORSE_NAMES).slice(0, 4);
-    const playerLane = Math.floor(Math.random() * 5);
+    if (roster && roster.length === 5) {
+      const personalities = shuffled(PERSONALITIES).slice(0, 4);
+      let aiIdx = 0;
+      horses = roster
+        .slice()
+        .sort((a, b) => a.lane - b.lane)
+        .map((p) =>
+          p.isYou
+            ? makeHorse({
+                id: p.id || 'player',
+                lane: p.lane,
+                isPlayer: true,
+                name: p.name,
+                color: p.color,
+              })
+            : makeHorse({
+                id: p.id,
+                lane: p.lane,
+                isPlayer: false,
+                name: p.name,
+                color: p.color,
+                personality: personalities[aiIdx++],
+              }),
+        );
+    } else {
+      const personalities = shuffled(PERSONALITIES).slice(0, 4);
+      const aiNames = shuffled(HORSE_NAMES).slice(0, 4);
+      const playerLane = Math.floor(Math.random() * 5);
 
-    horses = [];
-    let aiIdx = 0;
-    for (let lane = 0; lane < 5; lane++) {
-      if (lane === playerLane) {
-        horses.push(
-          makeHorse({
-            id: `player`,
-            lane,
-            isPlayer: true,
-            name: playerName,
-            color: COLORS[lane],
-          }),
-        );
-      } else {
-        horses.push(
-          makeHorse({
-            id: `ai-${lane}`,
-            lane,
-            isPlayer: false,
-            name: aiNames[aiIdx],
-            color: COLORS[lane],
-            personality: personalities[aiIdx],
-          }),
-        );
-        aiIdx++;
+      horses = [];
+      let aiIdx = 0;
+      for (let lane = 0; lane < 5; lane++) {
+        if (lane === playerLane) {
+          horses.push(
+            makeHorse({
+              id: `player`,
+              lane,
+              isPlayer: true,
+              name: playerName,
+              color: COLORS[lane],
+            }),
+          );
+        } else {
+          horses.push(
+            makeHorse({
+              id: `ai-${lane}`,
+              lane,
+              isPlayer: false,
+              name: aiNames[aiIdx],
+              color: COLORS[lane],
+              personality: personalities[aiIdx],
+            }),
+          );
+          aiIdx++;
+        }
       }
     }
     emit();

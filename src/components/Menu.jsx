@@ -38,7 +38,7 @@ export default function Menu({ onStart, playerName, setPlayerName }) {
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-ink-900 py-4 text-base font-semibold text-white shadow-lg shadow-ink-900/20 transition-transform active:scale-[0.99]"
         >
           <Play size={18} fill="currentColor" />
-          Start Race
+          Join Lobby
         </button>
 
         <div className="mt-5 grid grid-cols-3 gap-2 text-center text-[11px] text-ink-400">

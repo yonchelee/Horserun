@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Timer, Users } from 'lucide-react';
 
 import Menu from './components/Menu.jsx';
+import Lobby from './components/Lobby.jsx';
 import Track from './components/Track.jsx';
 import Leaderboard from './components/Leaderboard.jsx';
 import Controls from './components/Controls.jsx';
-import Countdown from './components/Countdown.jsx';
 import Results from './components/Results.jsx';
 import RotatePrompt from './components/RotatePrompt.jsx';
 
@@ -13,7 +13,8 @@ import { createMockNetwork } from './game/network.js';
 import { rankHorses } from './game/engine.js';
 
 export default function App() {
-  const [phase, setPhase] = useState('menu'); // menu | countdown | racing | finished
+  // menu (login) → lobby (waiting room) → racing → finished
+  const [phase, setPhase] = useState('menu');
   const [playerName, setPlayerName] = useState('Rider');
   const [snapshot, setSnapshot] = useState(null);
   const [ranking, setRanking] = useState([]);
@@ -33,10 +34,16 @@ export default function App() {
     };
   }, []);
 
-  const handleStart = () => {
+  const handleJoinLobby = () => {
+    setPhase('lobby');
+  };
+
+  // Called by Lobby once the 10s post-everyone-ready countdown ends.
+  const handleLobbyStart = (roster) => {
     netRef.current?.destroy();
     const net = createMockNetwork({
       playerName: (playerName || '').trim() || 'You',
+      roster,
       onState: (s) => setSnapshot(s),
       onFinish: (rank) => {
         setRanking(rank);
@@ -46,19 +53,21 @@ export default function App() {
     });
     netRef.current = net;
     setRanking([]);
-    setPhase('countdown');
-  };
-
-  const handleCountdownDone = () => {
     startedAtRef.current = performance.now();
-    netRef.current?.start();
+    net.start();
     setPhase('racing');
   };
 
+  const handleLeaveLobby = () => {
+    setPhase('menu');
+  };
+
   const handlePlayAgain = () => {
+    netRef.current?.destroy();
+    netRef.current = null;
     setSnapshot(null);
     setRanking([]);
-    setPhase('menu');
+    setPhase('lobby');
   };
 
   const handleTap = (side) => netRef.current?.sendTap(side);
@@ -83,25 +92,31 @@ export default function App() {
       {phase === 'menu' && (
         <div className="flex h-full w-full flex-col p-3">
           <Menu
-            onStart={handleStart}
+            onStart={handleJoinLobby}
             playerName={playerName}
             setPlayerName={setPlayerName}
           />
         </div>
       )}
 
-      {(phase === 'countdown' || phase === 'racing') && snapshot && (
+      {phase === 'lobby' && (
+        <div className="flex h-full w-full flex-col p-3">
+          <Lobby
+            playerName={playerName}
+            onStart={handleLobbyStart}
+            onLeave={handleLeaveLobby}
+          />
+        </div>
+      )}
+
+      {phase === 'racing' && snapshot && (
         <GameScreen
           snapshot={snapshot}
           startedAt={startedAtRef.current}
           phase={phase}
           now={now}
           onTap={handleTap}
-        >
-          {phase === 'countdown' && (
-            <Countdown onDone={handleCountdownDone} />
-          )}
-        </GameScreen>
+        />
       )}
 
       {phase === 'finished' && (
@@ -117,7 +132,7 @@ export default function App() {
   );
 }
 
-function GameScreen({ snapshot, startedAt, phase, now, onTap, children }) {
+function GameScreen({ snapshot, startedAt, phase, now, onTap }) {
   const horses = snapshot.horses;
   const player = horses.find((h) => h.isPlayer);
   const elapsed =
@@ -145,7 +160,6 @@ function GameScreen({ snapshot, startedAt, phase, now, onTap, children }) {
       {/* Track */}
       <div className="relative min-h-0 flex-[3]">
         <Track horses={horses} />
-        {children}
       </div>
 
       {/* Leaderboard */}
