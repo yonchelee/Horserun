@@ -7,7 +7,6 @@ import Track from './components/Track.jsx';
 import Leaderboard from './components/Leaderboard.jsx';
 import Controls from './components/Controls.jsx';
 import Results from './components/Results.jsx';
-import RotatePrompt from './components/RotatePrompt.jsx';
 
 import { createNetwork, isMultiplayerEnabled } from './game/network.js';
 
@@ -78,9 +77,15 @@ export default function App() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 flex flex-col bg-ink-50 text-ink-900 font-sans">
-      <RotatePrompt />
-
+    <div
+      className="flex flex-col overflow-hidden bg-ink-50 text-ink-900 font-sans"
+      // Prefer dvh so in-app browsers (KakaoTalk / LINE / Instagram /
+      // …) that overlay top + bottom chrome don't push our content
+      // behind their bars. `fixed inset-0` would size to the *large*
+      // viewport on older WebKit and clip the same way we're trying
+      // to fix.
+      style={{ height: '100dvh', minHeight: '100%' }}
+    >
       {!identity && (
         <div className="flex h-full w-full flex-col p-3">
           <Menu onSubmit={handleLogin} />
