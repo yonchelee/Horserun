@@ -27,14 +27,16 @@ button {
   display: none;
 }
 
-/* Sprite-sheet gallop animation. The sheet is 8 horizontal frames,
-   so background-size is set to 800% on the SpriteHorse element and
-   we shift the visible window across each frame in 8 discrete steps. */
+/* Sprite-sheet gallop animation. SpriteHorse renders the full 8-frame
+   strip inside an overflow:hidden viewport, then this keyframe slides
+   that strip left by exactly its own width (translateX(-100%)). With
+   `steps(8)` each jump moves one frame, and because the percentage is
+   relative to the strip's own width we don't need any pixel math here. */
 @keyframes horseGallop {
   from {
-    background-position-x: 0%;
+    transform: translate3d(0, 0, 0);
   }
   to {
-    background-position-x: -800%;
+    transform: translate3d(-100%, 0, 0);
   }
 }

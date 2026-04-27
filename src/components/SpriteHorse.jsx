@@ -65,18 +65,19 @@ export default function SpriteHorse({ lane = 0, speed = 0, size = 56, paused = f
   // jump. Once available we show the sprite.
   const visible = available === true;
 
+  // Strategy: render the entire 8-frame strip inside a `size × size`
+  // viewport with overflow:hidden, then translateX(-100%) the strip
+  // (i.e. by its own full width = FRAMES × size) over the cycle.
+  // With steps(FRAMES) each jump is exactly one frame width, and
+  // because translateX(-100%) is relative to the strip's own width
+  // we don't need any pixel math in the keyframe.
   return (
     <div
       aria-hidden
       style={{
         width: size,
         height: size,
-        backgroundImage: visible ? `url(${SPRITE_URL})` : 'none',
-        backgroundSize: `${FRAMES * 100}% 100%`,
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: '0% 50%',
-        imageRendering: 'auto',
-        animation: paused ? 'none' : `horseGallop ${duration}s steps(${FRAMES}) infinite`,
+        overflow: 'hidden',
         filter: [
           LANE_FILTERS[lane % LANE_FILTERS.length],
           dimmed ? 'grayscale(0.5) brightness(0.9)' : '',
@@ -84,10 +85,23 @@ export default function SpriteHorse({ lane = 0, speed = 0, size = 56, paused = f
         ]
           .filter(Boolean)
           .join(' '),
-        // Sprite faces right by default in the reference frames.
-        transform: 'translateZ(0)',
-        willChange: 'background-position',
       }}
-    />
+    >
+      <div
+        style={{
+          width: FRAMES * size,
+          height: size,
+          backgroundImage: visible ? `url(${SPRITE_URL})` : 'none',
+          backgroundSize: `${FRAMES * size}px ${size}px`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: '0 0',
+          imageRendering: 'auto',
+          animation: paused
+            ? 'none'
+            : `horseGallop ${duration}s steps(${FRAMES}) infinite`,
+          willChange: 'transform',
+        }}
+      />
+    </div>
   );
 }
