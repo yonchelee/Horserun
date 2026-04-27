@@ -12,13 +12,17 @@ export default function Horse({ horse, isPlayer, now }) {
   const pct = (horse.position / TRACK_LENGTH) * 92;
 
   return (
-    <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+    <div className="absolute inset-y-0 left-0 right-0">
       <div
-        className="relative will-change-transform"
+        className="absolute top-1/2 -translate-y-1/2 will-change-[left]"
         style={{
-          transform: `translateX(${pct}%)`,
-          transition: 'transform 80ms linear',
-          paddingLeft: '4px',
+          // Position relative to the LANE width, not the inner element's
+          // own width. Using `left: %` here is the fix; previously we
+          // used translateX(${pct}%) which is element-relative, so the
+          // horse only shifted by ~pct% of its own ~100px content width
+          // and never reached the finish line.
+          left: `calc(${pct}% + 4px)`,
+          transition: 'left 80ms linear',
         }}
       >
         <div className="flex items-center gap-1.5">
