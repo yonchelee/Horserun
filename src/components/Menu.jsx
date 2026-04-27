@@ -44,22 +44,37 @@ export default function Menu({ onSubmit }) {
   };
 
   return (
-    <div className="flex h-full w-full items-center justify-center">
-      <div className="w-full max-w-md rounded-3xl border border-ink-100 bg-white px-6 py-7 shadow-xl">
-        <div className="mb-5 flex items-center gap-2 text-ink-400">
-          <Sparkles size={14} />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">
-            Live race
-          </span>
+    <div className="flex h-full w-full items-center justify-center overflow-y-auto py-4">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-xl">
+        {/* Hero — full-bleed image at the top of the card. The image
+            already contains the HORSERUN logo + tagline, so we drop
+            the duplicate text title and keep only the small "Live
+            race" eyebrow below for context. */}
+        <div className="relative aspect-[1080/875] w-full bg-ink-100">
+          <img
+            src="/login-hero.jpg"
+            alt="Horserun"
+            className="h-full w-full object-cover"
+            loading="eager"
+            decoding="async"
+          />
+          {/* Soft fade into the card body so the photo doesn't
+              hard-cut against the white form. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-b from-transparent to-white" />
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-ink-900">
-          Horse run
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-400">
-          Alternate left and right taps to gallop. Land each tap inside the
-          green sweet zone (220–320ms apart) for full speed. Same-side taps
-          add nothing.
-        </p>
+
+        <div className="px-6 pb-7 pt-5">
+          <div className="mb-3 flex items-center gap-2 text-ink-400">
+            <Sparkles size={14} />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">
+              Live race
+            </span>
+          </div>
+          <p className="text-sm leading-relaxed text-ink-400">
+            Alternate left and right taps to gallop. Land each tap inside the
+            green sweet zone (220–320ms apart) for full speed. Same-side taps
+            add nothing.
+          </p>
 
         {kakaoOn && (
           <button
@@ -115,6 +130,7 @@ export default function Menu({ onSubmit }) {
           <Tip k="L → R" v="Alternate" />
           <Tip k="220–320ms" v="Sweet zone" />
           <Tip k="PERFECT" v="Full speed" />
+        </div>
         </div>
       </div>
     </div>
