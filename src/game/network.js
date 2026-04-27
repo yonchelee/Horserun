@@ -22,12 +22,16 @@ const HORSE_NAMES = [
 
 const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet'];
 
+// Sweet-spot in engine.js is 220–320ms. AIs are tuned to land mostly
+// inside it, with each personality biased to a different part of the
+// band so races don't feel uniform. Erratic deliberately leaks outside
+// the band — it's the "messy" rival.
 const PERSONALITIES = [
-  { id: 'sprinter', baseInterval: 130, jitter: 0.25, restThreshold: 22, restProb: 0.4 },
-  { id: 'pacer', baseInterval: 205, jitter: 0.18, restThreshold: 55, restProb: 0.6 },
-  { id: 'steady', baseInterval: 165, jitter: 0.3, restThreshold: 38, restProb: 0.5 },
-  { id: 'erratic', baseInterval: 150, jitter: 0.55, restThreshold: 30, restProb: 0.4 },
-  { id: 'closer', baseInterval: 220, jitter: 0.25, restThreshold: 45, restProb: 0.7 },
+  { id: 'sprinter', baseInterval: 235, jitter: 0.12, restThreshold: 25, restProb: 0.45 },
+  { id: 'pacer', baseInterval: 305, jitter: 0.08, restThreshold: 55, restProb: 0.6 },
+  { id: 'steady', baseInterval: 270, jitter: 0.12, restThreshold: 40, restProb: 0.5 },
+  { id: 'erratic', baseInterval: 260, jitter: 0.4, restThreshold: 30, restProb: 0.4 },
+  { id: 'closer', baseInterval: 290, jitter: 0.1, restThreshold: 45, restProb: 0.65 },
 ];
 
 function shuffled(arr) {
@@ -49,12 +53,15 @@ function tickAI(horse, dt, now) {
   const p = horse.personality;
   const lowStamina = horse.stamina < p.restThreshold;
 
-  // "Closer" personality pushes harder near the finish line.
-  const lateGameBoost =
-    p.id === 'closer' && horse.position > 70 ? 0.7 : 1;
+  // "Closer" rests less in the final stretch instead of cranking up
+  // tap rate — the sweet-spot rule means faster taps would only cost
+  // them speed efficiency, so the late-game push is now about staying
+  // on cadence longer rather than mashing.
+  const lateGame = p.id === 'closer' && horse.position > 70;
+  const restProb = lateGame ? p.restProb * 0.4 : p.restProb;
 
-  if (lowStamina && Math.random() < p.restProb) {
-    horse.aiNextTapIn = (320 + Math.random() * 280) * lateGameBoost;
+  if (lowStamina && Math.random() < restProb) {
+    horse.aiNextTapIn = 320 + Math.random() * 260;
     return;
   }
 
@@ -62,7 +69,11 @@ function tickAI(horse, dt, now) {
   applyTap(horse, newSide, now);
 
   const j = 1 - p.jitter + Math.random() * p.jitter * 2;
-  horse.aiNextTapIn = p.baseInterval * j * (lowStamina ? 1.45 : 1) * lateGameBoost;
+  // When low on stamina, AIs intentionally drift to the slow edge of
+  // the sweet zone (~310ms) so they don't chain quick taps into an
+  // overheat. Still inside the band → still 'perfect' gain.
+  const staminaStretch = lowStamina ? 1.15 : 1;
+  horse.aiNextTapIn = p.baseInterval * j * staminaStretch;
 }
 
 export function createMockNetwork({ playerName = 'YOU', onState, onFinish }) {

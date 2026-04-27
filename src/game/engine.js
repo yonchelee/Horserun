@@ -8,7 +8,20 @@ export const OVERHEAT_MS = 3000;
 export const STAMINA_COST_PER_TAP = 5;
 export const STAMINA_RECOVERY_PER_SEC = 18;
 
-export const SPEED_GAIN_PER_TAP = 1.6;
+// Rhythm windows (ms between alternating taps).
+// Inside the sweet zone we award the full speed gain; outside we award
+// only a fraction. A "fresh start" gap (e.g. after rest or overheat)
+// is treated as sweet so players aren't penalised for pacing.
+export const SWEET_MIN_MS = 220;
+export const SWEET_MAX_MS = 320;
+export const FRESH_START_MS = 600;
+
+export const SPEED_GAIN_PERFECT = 1.6;
+export const SPEED_GAIN_OFF = 0.55;
+
+// Kept as the legacy alias so older imports still resolve.
+export const SPEED_GAIN_PER_TAP = SPEED_GAIN_PERFECT;
+
 export const MAX_SPEED = 16;
 // Multiplicative damping toward 0 per second: speed *= damping^dt
 export const SPEED_DAMPING_PER_SEC = 0.5;
@@ -34,8 +47,20 @@ export function makeHorse({ id, lane, isPlayer, name, color, personality = null 
     overheatUntil: 0,
     finished: false,
     finishedAt: null,
+    // Last tap interval + quality, populated by applyTap. The UI reads
+    // these to render the rhythm gauge / feedback for the player.
+    lastInterval: null,
+    lastQuality: null, // 'perfect' | 'off' | 'fresh' | 'same'
+    qualityUntil: 0,
     aiNextTapIn: 80 + Math.random() * 220,
   };
+}
+
+// Returns one of: 'perfect' | 'off' | 'fresh'
+export function classifyInterval(intervalMs) {
+  if (intervalMs == null || intervalMs > FRESH_START_MS) return 'fresh';
+  if (intervalMs >= SWEET_MIN_MS && intervalMs <= SWEET_MAX_MS) return 'perfect';
+  return 'off';
 }
 
 export function applyTap(horse, side, now) {
@@ -43,9 +68,20 @@ export function applyTap(horse, side, now) {
   if (now < horse.overheatUntil) return;
 
   const sameSide = horse.lastSide === side;
-  if (!sameSide) {
-    horse.speed = Math.min(MAX_SPEED, horse.speed + SPEED_GAIN_PER_TAP);
+  const prevTap = horse.lastTapAt || 0;
+  const interval = prevTap > 0 ? now - prevTap : null;
+
+  if (sameSide) {
+    horse.lastQuality = 'same';
+  } else {
+    const quality = classifyInterval(interval);
+    horse.lastQuality = quality;
+    const gain = quality === 'off' ? SPEED_GAIN_OFF : SPEED_GAIN_PERFECT;
+    horse.speed = Math.min(MAX_SPEED, horse.speed + gain);
   }
+  horse.lastInterval = interval;
+  horse.qualityUntil = now + 700; // hold the badge briefly for the UI
+
   horse.lastSide = side;
   horse.lastTapAt = now;
   horse.tapCount += 1;
