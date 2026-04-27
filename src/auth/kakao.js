@@ -52,6 +52,14 @@ export function ensureKakaoReady() {
     if (!window.Kakao.isInitialized()) {
       window.Kakao.init(KAKAO_KEY);
     }
+    // Defensive runtime check: catch the "v2 SDK silently swapped in"
+    // case so the failure message points at the actual cause instead
+    // of bubbling up as the cryptic "Kakao.Auth.login is not a function".
+    if (typeof window.Kakao?.Auth?.login !== 'function') {
+      throw new Error(
+        'Kakao SDK loaded but Kakao.Auth.login is missing. The CDN may have served a v2 build; pin the SDK URL to v1 (e.g. /kakao_js_sdk/1.43.5/kakao.min.js).',
+      );
+    }
   })();
   return readyPromise;
 }
