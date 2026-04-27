@@ -27,16 +27,8 @@ button {
   display: none;
 }
 
-/* Sprite-sheet gallop animation. SpriteHorse renders the full 8-frame
-   strip inside an overflow:hidden viewport, then this keyframe slides
-   that strip left by exactly its own width (translateX(-100%)). With
-   `steps(8)` each jump moves one frame, and because the percentage is
-   relative to the strip's own width we don't need any pixel math here. */
-@keyframes horseGallop {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(-100%, 0, 0);
-  }
-}
+/* The sprite gallop is driven entirely from JS in SpriteHorse.jsx
+   (render-time phase integration), since CSS @keyframes restart every
+   time React reapplies the inline `animation` property as `speed`
+   changes — that restart pinned the visible frame at index 0 and was
+   the root cause of the flicker. */

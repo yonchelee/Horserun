@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Drop a 8-frame horizontal sprite sheet at /public/horse-sprite.png
 // (each frame square, e.g. 2048x256 = 8 x 256x256). When the file is
@@ -29,8 +29,25 @@ const LANE_FILTERS = [
   'hue-rotate(240deg) saturate(0.95)',          // violet
 ];
 
+// Cap the gallop cadence so we don't ask the browser for frame rates
+// faster than it can render.
+const MAX_CYCLES_PER_SEC = 7;
+
 export default function SpriteHorse({ lane = 0, speed = 0, size = 56, paused = false, dimmed = false }) {
   const [available, setAvailable] = useState(null);
+
+  // Phase ∈ [0, 1) — fraction of one full gallop cycle. We integrate it
+  // by hand instead of using CSS @keyframes, because the CSS animation
+  // would restart every time React reapplies the inline `animation`
+  // property (which happens on every render since `speed` changes
+  // continuously), and the restart pins the visible frame at index 0 —
+  // exactly the "flicker on frame 1" symptom.
+  //
+  // Parent re-renders ~60fps during racing (Track receives a fresh
+  // snapshot from the network each RAF tick), so render-time integration
+  // is enough; no local RAF needed.
+  const phaseRef = useRef(0);
+  const lastTimeRef = useRef(performance.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -42,10 +59,18 @@ export default function SpriteHorse({ lane = 0, speed = 0, size = 56, paused = f
     };
   }, []);
 
-  // Cycles per second scales with speed. At rest we still walk slowly
-  // so the horse never looks frozen.
-  const cyclesPerSec = Math.max(1.5, 1.5 + speed * 0.6);
-  const duration = 1 / cyclesPerSec;
+  const cyclesPerSec = Math.min(
+    MAX_CYCLES_PER_SEC,
+    Math.max(2.0, 2.0 + speed * 0.45),
+  );
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastTimeRef.current) / 1000);
+  lastTimeRef.current = now;
+  if (!paused && dt > 0) {
+    phaseRef.current = (phaseRef.current + cyclesPerSec * dt) % 1;
+    if (phaseRef.current < 0) phaseRef.current += 1;
+  }
+  const frameIdx = Math.floor(phaseRef.current * FRAMES) % FRAMES;
 
   if (available === false) {
     return (
@@ -61,16 +86,9 @@ export default function SpriteHorse({ lane = 0, speed = 0, size = 56, paused = f
     );
   }
 
-  // While we're checking, render an invisible spacer so layout doesn't
-  // jump. Once available we show the sprite.
   const visible = available === true;
+  const offsetX = -frameIdx * size;
 
-  // Strategy: render the entire 8-frame strip inside a `size × size`
-  // viewport with overflow:hidden, then translateX(-100%) the strip
-  // (i.e. by its own full width = FRAMES × size) over the cycle.
-  // With steps(FRAMES) each jump is exactly one frame width, and
-  // because translateX(-100%) is relative to the strip's own width
-  // we don't need any pixel math in the keyframe.
   return (
     <div
       aria-hidden
@@ -96,9 +114,7 @@ export default function SpriteHorse({ lane = 0, speed = 0, size = 56, paused = f
           backgroundRepeat: 'no-repeat',
           backgroundPosition: '0 0',
           imageRendering: 'auto',
-          animation: paused
-            ? 'none'
-            : `horseGallop ${duration}s steps(${FRAMES}) infinite`,
+          transform: `translate3d(${offsetX}px, 0, 0)`,
           willChange: 'transform',
         }}
       />

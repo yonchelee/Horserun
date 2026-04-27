@@ -12,8 +12,10 @@ export const SPEED_GAIN_PER_TAP = 1.6;
 export const MAX_SPEED = 16;
 // Multiplicative damping toward 0 per second: speed *= damping^dt
 export const SPEED_DAMPING_PER_SEC = 0.5;
-// Position units gained per (speed * second)
-export const PROGRESS_PER_SPEED_PER_SEC = 0.55;
+// Position units gained per (speed * second). Doubled from 0.55 so a
+// full race finishes in roughly half the time — the prior pace felt
+// too long for the L/R rhythm tension to sustain.
+export const PROGRESS_PER_SPEED_PER_SEC = 1.1;
 
 export function makeHorse({ id, lane, isPlayer, name, color, personality = null }) {
   return {
