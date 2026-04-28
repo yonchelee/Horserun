@@ -27,6 +27,7 @@ const LANE_FILTERS = [
   'hue-rotate(95deg) saturate(0.9)',            // emerald
   'hue-rotate(170deg) saturate(0.95)',          // sky
   'hue-rotate(240deg) saturate(0.95)',          // violet
+  'hue-rotate(290deg) saturate(1.1)',           // fuchsia
 ];
 
 // Cap the gallop cadence so we don't ask the browser for frame rates
