@@ -185,6 +185,14 @@ export class Main extends Server<Env> {
   // ── Lifecycle ──
   async onConnect(conn: Connection, _ctx: ConnectionContext) {
     this.ensureInit();
+    // If we're somehow mid-cycle with nobody human in the room (e.g. an
+    // alarm-driven race kept ticking after the last player left), reset
+    // before letting the joiner take a slot — otherwise they'd inherit a
+    // bot's mid-race position and skip straight past the ready screen.
+    const hasHumans = this.horses.some((h) => !h.isBot);
+    if (!hasHumans && this.phase !== 'lobby') {
+      this.initLobby();
+    }
     const botSlot = this.horses.find((h) => h.isBot);
     if (!botSlot) {
       conn.send(JSON.stringify({ type: 'rejected', reason: 'Room is full' }));
@@ -260,6 +268,16 @@ export class Main extends Server<Env> {
     if (!horse) return;
     const replacement = makeBot(horse.lane, horse.color);
     Object.assign(horse, replacement);
+    // If that was the last human, drop any in-flight countdown/race and
+    // park the room in lobby. Otherwise the alarm loop keeps cycling
+    // through bot-only races and the next human to connect lands in the
+    // middle of one.
+    const hasHumans = this.horses.some((h) => !h.isBot);
+    if (!hasHumans) {
+      this.initLobby();
+      this.broadcastState();
+      return;
+    }
     this.broadcastState();
     this.maybeStartCountdown();
   }
@@ -319,6 +337,10 @@ export class Main extends Server<Env> {
 
   maybeStartCountdown() {
     if (this.phase !== 'lobby') return;
+    // Don't auto-start if the room is bots-only — bots are always
+    // marked ready, so without this guard an empty room would loop
+    // through countdown → race → reset forever.
+    if (!this.horses.some((h) => !h.isBot)) return;
     if (this.horses.every((h) => h.ready)) {
       this.phase = 'countdown';
       this.countdownEndsAt = Date.now() + COUNTDOWN_MS;
