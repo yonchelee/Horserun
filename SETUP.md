@@ -53,6 +53,18 @@ VITE_PARTYKIT_HOST=127.0.0.1:8787
 
 같은 Wi-Fi의 폰에서도 LAN IP로 접속 가능합니다.
 
+### 1-4. 자동 배포 (GitHub Actions)
+`.github/workflows/deploy-worker.yml`이 default 브랜치(`claude/horse-racing-game-fiALg`)로 push될 때마다 Worker를 자동 배포합니다. Actions 탭에서 수동 트리거(`workflow_dispatch`)도 가능합니다.
+
+활성화 절차 (한 번만):
+1. Cloudflare 대시보드 → My Profile → API Tokens → **Create Token** → "Edit Cloudflare Workers" 템플릿. 만든 토큰 값 복사.
+2. Cloudflare 대시보드 우측의 **Account ID** 복사 (Workers & Pages 섹션에서도 확인 가능).
+3. GitHub 저장소 → Settings → Secrets and variables → Actions → **New repository secret**:
+   - `CLOUDFLARE_API_TOKEN` = 1단계 토큰
+   - `CLOUDFLARE_ACCOUNT_ID` = 2단계 ID
+
+두 시크릿이 등록된 뒤 default로 push되면 워크플로우가 `npm ci` → `wrangler deploy`를 자동으로 실행합니다. 시크릿이 없으면 워크플로우는 실패하고 안전하게 멈춥니다 — 운영 중인 Worker엔 영향 없음.
+
 ## 2. 카카오 로그인 등록
 
 ### 2-1. 앱 생성
