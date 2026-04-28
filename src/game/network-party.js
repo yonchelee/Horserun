@@ -69,9 +69,25 @@ export function createPartyNetwork({
           finishedAt: msg.finishedAt,
         });
     } else if (msg.type === 'kicked') {
-      // Admin removed us from the room. Treat similarly to rejected
-      // but signal a separate reason so the UI can distinguish "방장이
-      // 내보냈습니다" from a generic connection failure.
+      // Admin removed us from the room. Two things have to happen
+      // here, IN THIS ORDER:
+      //
+      //  1. Disable PartySocket auto-reconnect by calling socket.close()
+      //     synchronously. PartySocket's _shouldReconnect defaults to
+      //     true; the only way to flip it is to call .close() (or pass
+      //     startClosed at construction). The server is also closing
+      //     the connection, but the client's _handleClose checks
+      //     _shouldReconnect and reconnects unless we've already set
+      //     it to false — otherwise we land right back in the room as
+      //     a fresh slot, which is exactly the bug this fix prevents.
+      //
+      //  2. THEN tell App.jsx via onKicked so it can tear down identity
+      //     state and surface the banner.
+      try {
+        socket.close(1000, 'kicked');
+      } catch {
+        // Already-closed sockets throw; harmless.
+      }
       onKicked && onKicked(msg.reason || '방장이 내보냈습니다');
     } else if (msg.type === 'rejected') {
       onRejected && onRejected(msg.reason || 'rejected');
