@@ -1,18 +1,23 @@
 import { Trophy } from 'lucide-react';
 import { COLOR_MAP } from './colors.js';
-import { rankHorses } from '../game/engine.js';
 
-const RANK_LABEL = ['1st', '2nd', '3rd', '4th', '5th'];
+// `entries` comes from buildLeaderboardList (in src/game/visible.js):
+// rank-ordered list with role-based colors already applied. The
+// player's own pill uses YOU_COLOR (amber); others use rank colors.
+//
+// We don't render every horse in a 150-player room — just the top 5
+// (with the player swapped in if they're outside it) so the bar
+// stays scannable.
 
-export default function Leaderboard({ horses }) {
-  const ranked = rankHorses(horses);
+export default function Leaderboard({ entries }) {
+  const list = entries || [];
 
   return (
     <div className="flex h-full items-center gap-2 rounded-2xl border border-ink-100 bg-white/80 px-3 py-2 shadow-sm backdrop-blur">
       <Trophy size={16} className="shrink-0 text-amber-500" />
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        {ranked.map((h, i) => {
-          const c = COLOR_MAP[h.color];
+        {list.map((h) => {
+          const c = COLOR_MAP[h.color] || COLOR_MAP.sky;
           return (
             <div
               key={h.id}
@@ -22,12 +27,12 @@ export default function Leaderboard({ horses }) {
               ].join(' ')}
             >
               <span className="font-mono text-[10px] opacity-70">
-                {RANK_LABEL[i]}
+                #{h.rank ?? '?'}
               </span>
               <span className={`h-2 w-2 rounded-full ${c.bg}`} />
               <span className="max-w-[72px] truncate">{h.name}</span>
               <span className="font-mono text-[10px] opacity-70">
-                {Math.floor(h.position)}%
+                {Math.floor(h.position ?? 0)}%
               </span>
             </div>
           );

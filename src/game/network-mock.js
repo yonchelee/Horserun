@@ -1,17 +1,16 @@
-// Local-only fallback that mirrors the PartyKit server's state machine
-// 1:1, so the rest of the app doesn't need to know whether it's talking
-// to a real server or this in-browser stub.
-//
-// Surface:
-//   const net = createMockNetwork({ identity, onState, onFinished });
-//   net.identify(identity); net.setReady(true);
-//   net.sendTap('L'); net.serverNow(); net.destroy();
+// Local-only fallback that mirrors the PartyKit server's state machine.
+// Emits the same compact per-tick payload the real server does (you +
+// top + summary counts) so client components don't need a separate
+// code path for offline play.
 
 import { applyTap, tickHorse, rankHorses, makeHorse } from './engine.js';
 
-const MAX_PLAYERS = 5;
-const COUNTDOWN_MS = 5_000;
+const MIN_RACERS = 5;
+const COUNTDOWN_MS = 30_000;
 const POST_RACE_RESET_MS = 15_000;
+const FINISH_QUORUM = 10;
+const FINISH_GRACE_MS = 30_000;
+const VISIBLE_TOP_N = 5;
 const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet'];
 const ADMIN_NAME = '이영채1657';
 const BOT_NAMES = ['Comet', 'Shadow', 'Blitz', 'Vortex', 'Phoenix', 'Storm', 'Echo', 'Nova'];
@@ -39,7 +38,7 @@ function makeBot(lane) {
     lane,
     isPlayer: false,
     name: shuffled(BOT_NAMES)[0],
-    color: COLORS[lane],
+    color: COLORS[lane % COLORS.length],
     personality,
   });
   horse.isBot = true;
@@ -53,7 +52,7 @@ function makeHumanSlot(lane, identity) {
     lane,
     isPlayer: true,
     name: identity?.name || 'Rider',
-    color: COLORS[lane],
+    color: COLORS[lane % COLORS.length],
   });
   horse.isBot = false;
   horse.ready = false;
@@ -81,6 +80,8 @@ export function createMockNetwork({ identity, onState, onFinished }) {
   let countdownEndsAt = null;
   let startedAt = null;
   let finishedAt = null;
+  let resetAt = null;
+  let finishGraceUntil = null;
   let raf = null;
   let last = 0;
   const timers = new Set();
@@ -95,14 +96,28 @@ export function createMockNetwork({ identity, onState, onFinished }) {
     return id;
   }
 
-  function publicHorse(h) {
+  // Compact projection used for top-5 slots.
+  function shortHorse(h, rank) {
+    return {
+      id: h.id,
+      name: h.name,
+      color: h.color,
+      isBot: h.isBot,
+      profileImage: h.profileImage ?? null,
+      position: h.position,
+      finished: h.finished,
+      rank,
+    };
+  }
+
+  // Full projection used for the player's "you" slot.
+  function fullHorse(h, rank) {
     return {
       id: h.id,
       lane: h.lane,
       name: h.name,
       color: h.color,
       isBot: h.isBot,
-      // Distinguish "you" from other humans (only one human in mock).
       connId: h.isBot ? null : 'self',
       ready: h.ready,
       position: h.position,
@@ -116,16 +131,42 @@ export function createMockNetwork({ identity, onState, onFinished }) {
       finishedAt: h.finishedAt,
       profileImage: h.profileImage ?? null,
       isAdmin: !!h.isAdmin,
+      rank,
     };
   }
 
   function snapshot() {
+    const ranked = rankHorses(horses);
+    const rankOf = new Map();
+    ranked.forEach((h, i) => rankOf.set(h.id, i + 1));
+    const human = horses.find((h) => !h.isBot);
+    const top = ranked
+      .slice(0, VISIBLE_TOP_N)
+      .map((h) => shortHorse(h, rankOf.get(h.id)));
+
+    let humans = 0;
+    let ready = 0;
+    let finished = 0;
+    for (const h of horses) {
+      if (!h.isBot) humans += 1;
+      if (h.ready) ready += 1;
+      if (h.finished) finished += 1;
+    }
+
     return {
       phase,
-      horses: horses.map(publicHorse),
+      serverNow: Date.now(),
       countdownEndsAt,
       raceStartedAt: startedAt,
-      serverNow: Date.now(),
+      finishedAt,
+      resetAt,
+      finishGraceUntil,
+      totalCount: horses.length,
+      humanCount: humans,
+      readyCount: ready,
+      finishedCount: finished,
+      you: human ? fullHorse(human, rankOf.get(human.id)) : null,
+      top,
     };
   }
 
@@ -133,37 +174,41 @@ export function createMockNetwork({ identity, onState, onFinished }) {
     onState && onState(snapshot());
   }
 
-  function initLobby() {
-    const playerLane = Math.floor(Math.random() * 5);
-    horses = [];
-    for (let lane = 0; lane < MAX_PLAYERS; lane++) {
-      horses.push(
-        lane === playerLane ? makeHumanSlot(lane, identity) : makeBot(lane),
-      );
+  function refillBotsToMin() {
+    while (horses.length < MIN_RACERS) {
+      horses.push(makeBot(horses.length));
     }
+  }
+
+  function initLobby() {
+    horses = [makeHumanSlot(0, identity)];
+    refillBotsToMin();
     phase = 'lobby';
     countdownEndsAt = null;
     startedAt = null;
     finishedAt = null;
+    resetAt = null;
+    finishGraceUntil = null;
     emit();
   }
 
   function maybeStartCountdown() {
     if (phase !== 'lobby') return;
-    if (horses.every((h) => h.ready)) {
-      phase = 'countdown';
-      countdownEndsAt = Date.now() + COUNTDOWN_MS;
-      emit();
-      setT(() => {
-        if (phase === 'countdown') startRace();
-      }, COUNTDOWN_MS);
-    }
+    // First human ready triggers the countdown; bot-ready doesn't count.
+    if (!horses.some((h) => !h.isBot && h.ready)) return;
+    phase = 'countdown';
+    countdownEndsAt = Date.now() + COUNTDOWN_MS;
+    emit();
+    setT(() => {
+      if (phase === 'countdown') startRace();
+    }, COUNTDOWN_MS);
   }
 
   function startRace() {
     phase = 'racing';
     startedAt = Date.now();
     last = performance.now();
+    finishGraceUntil = null;
     raf = requestAnimationFrame(loop);
     emit();
   }
@@ -177,7 +222,13 @@ export function createMockNetwork({ identity, onState, onFinished }) {
       if (h.isBot) tickBot(h, dt, now);
       tickHorse(h, dt, now);
     }
-    if (horses.every((h) => h.finished)) {
+    const finishedCount = horses.filter((h) => h.finished).length;
+    if (finishGraceUntil == null && finishedCount >= FINISH_QUORUM) {
+      finishGraceUntil = now + FINISH_GRACE_MS;
+    }
+    const allDone = horses.every((h) => h.finished);
+    const graceExpired = finishGraceUntil != null && now >= finishGraceUntil;
+    if (allDone || graceExpired) {
       finishRace();
       return;
     }
@@ -188,10 +239,24 @@ export function createMockNetwork({ identity, onState, onFinished }) {
   function finishRace() {
     phase = 'finished';
     finishedAt = Date.now();
+    resetAt = finishedAt + POST_RACE_RESET_MS;
+    finishGraceUntil = null;
     raf = null;
-    const ranking = rankHorses(horses).map(publicHorse);
+    const ranked = rankHorses(horses);
+    const rankOf = new Map();
+    ranked.forEach((h, i) => rankOf.set(h.id, i + 1));
+    const top = ranked
+      .slice(0, VISIBLE_TOP_N)
+      .map((h) => shortHorse(h, rankOf.get(h.id)));
+    const human = horses.find((h) => !h.isBot);
     emit();
-    onFinished && onFinished({ ranking, startedAt, finishedAt });
+    onFinished &&
+      onFinished({
+        top,
+        you: human ? fullHorse(human, rankOf.get(human.id)) : null,
+        startedAt,
+        finishedAt,
+      });
     setT(() => {
       initLobby();
     }, POST_RACE_RESET_MS);
@@ -201,7 +266,10 @@ export function createMockNetwork({ identity, onState, onFinished }) {
   function identifyFn(next) {
     const human = horses.find((h) => !h.isBot);
     if (!human) return;
-    if (next?.name) human.name = next.name;
+    if (next?.name) {
+      human.name = next.name;
+      human.isAdmin = next.name === ADMIN_NAME;
+    }
     if (next?.profileImage !== undefined) human.profileImage = next.profileImage;
     emit();
   }
@@ -209,17 +277,19 @@ export function createMockNetwork({ identity, onState, onFinished }) {
   function setReady(ready) {
     const human = horses.find((h) => !h.isBot);
     if (!human) return;
-    if (phase !== 'lobby') return;
+    if (phase !== 'lobby' && phase !== 'countdown') return;
     human.ready = !!ready;
     emit();
     if (ready) {
-      // Bots stay ready (they always are), but stagger visible "ready"
-      // toggles for the UX of seeing rivals click in.
       maybeStartCountdown();
     } else if (phase === 'countdown') {
-      phase = 'lobby';
-      countdownEndsAt = null;
-      emit();
+      // Solo human in mock — if they unready, kill the countdown.
+      const anyReady = horses.some((h) => !h.isBot && h.ready);
+      if (!anyReady) {
+        phase = 'lobby';
+        countdownEndsAt = null;
+        emit();
+      }
     }
   }
 
