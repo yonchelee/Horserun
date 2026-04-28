@@ -18,7 +18,7 @@ const PROGRESS_PER_SPEED_PER_SEC = 1.1;
 
 const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet'];
 const MAX_PLAYERS = 5;
-const COUNTDOWN_MS = 10_000;
+const COUNTDOWN_MS = 5_000;
 const POST_RACE_RESET_MS = 15_000;
 const TICK_MS = 1000 / 30; // 30Hz authoritative tick
 const BOT_NAMES = ['Comet', 'Shadow', 'Blitz', 'Vortex', 'Phoenix', 'Storm', 'Echo', 'Nova'];
