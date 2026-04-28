@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, MessageCircle, Loader2 } from 'lucide-react';
+import { Play, MessageCircle, Loader2, AlertTriangle, Copy, Check } from 'lucide-react';
 import { isKakaoEnabled, loginWithKakao } from '../auth/kakao.js';
 
 // Menu doubles as the login screen. If a Kakao JS key is configured we
@@ -7,16 +7,41 @@ import { isKakaoEnabled, loginWithKakao } from '../auth/kakao.js';
 // input. Either path resolves to an `identity` { provider, name,
 // profileImage } object passed to onSubmit.
 
+// Knox / KakaoTalk / Slack / Teams in-app webviews block popup-based
+// OAuth, so Kakao login dead-ends on a white screen. Detect common
+// in-app UA markers and surface a banner steering those users to the
+// system browser before they hit it.
+function isInAppBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /KAKAOTALK|\bLine\/|Instagram|FB_IAB|FBAN|FBAV|Twitter|Slack|Teams|Discord|WhatsApp|WeChat|Snapchat|Knox|; ?wv\)/i.test(
+    ua,
+  );
+}
+
 export default function Menu({ onSubmit }) {
   const kakaoOn = isKakaoEnabled();
+  const inApp = kakaoOn && isInAppBrowser();
   const [name, setName] = useState('Rider');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const submitGuest = (e) => {
     e?.preventDefault?.();
     const cleaned = (name || '').trim().slice(0, 16) || 'Rider';
     onSubmit({ provider: 'guest', id: `guest-${Date.now()}`, name: cleaned, profileImage: null });
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Some webviews block clipboard.writeText; user can long-press
+      // the address bar to copy as a fallback.
+    }
   };
 
   const submitKakao = async () => {
@@ -55,12 +80,35 @@ export default function Menu({ onSubmit }) {
         />
 
         <div className="px-6 pb-7 pt-3">
+        {inApp && (
+          <div className="mt-6 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold">메신저 내장 브라우저 감지</div>
+              <div className="mt-0.5 text-amber-800">
+                여기서는 카카오 로그인이 막힐 수 있어요. Safari/Chrome으로 열거나
+                게스트로 시작하세요.
+              </div>
+              <button
+                type="button"
+                onClick={copyLink}
+                className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-200"
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? '복사됨' : '링크 복사'}
+              </button>
+            </div>
+          </div>
+        )}
         {kakaoOn && (
           <button
             type="button"
             onClick={submitKakao}
             disabled={busy}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-yellow-300 py-3.5 text-base font-semibold text-yellow-950 shadow-lg shadow-yellow-300/40 transition-transform active:scale-[0.99] disabled:opacity-60"
+            className={[
+              'flex w-full items-center justify-center gap-2 rounded-2xl bg-yellow-300 py-3.5 text-base font-semibold text-yellow-950 shadow-lg shadow-yellow-300/40 transition-transform active:scale-[0.99] disabled:opacity-60',
+              inApp ? 'mt-3' : 'mt-6',
+            ].join(' ')}
           >
             {busy ? (
               <Loader2 size={18} className="animate-spin" />
