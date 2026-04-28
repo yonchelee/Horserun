@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, Sparkles, MessageCircle, Loader2 } from 'lucide-react';
+import { Play, MessageCircle, Loader2, AlertTriangle, Copy, Check } from 'lucide-react';
 import { isKakaoEnabled, loginWithKakao } from '../auth/kakao.js';
 
 // Menu doubles as the login screen. If a Kakao JS key is configured we
@@ -7,16 +7,46 @@ import { isKakaoEnabled, loginWithKakao } from '../auth/kakao.js';
 // input. Either path resolves to an `identity` { provider, name,
 // profileImage } object passed to onSubmit.
 
+// Knox / KakaoTalk / Slack / Teams in-app webviews block popup-based
+// OAuth, so Kakao login dead-ends on a white screen. Detect common
+// in-app UA markers and surface a banner steering those users to the
+// system browser before they hit it.
+function isInAppBrowser() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /KAKAOTALK|\bLine\/|Instagram|FB_IAB|FBAN|FBAV|Twitter|Slack|Teams|Discord|WhatsApp|WeChat|Snapchat|Knox|; ?wv\)/i.test(
+    ua,
+  );
+}
+
 export default function Menu({ onSubmit }) {
   const kakaoOn = isKakaoEnabled();
-  const [name, setName] = useState('Rider');
+  const inApp = kakaoOn && isInAppBrowser();
+  // Empty by default so the visible "Rider" comes from the placeholder
+  // instead of being seeded into the input. If the user types over a
+  // pre-filled value without first clearing it, their typed text gets
+  // appended (e.g. "Rider홍길동"), which silently breaks any name that
+  // needs to match exactly — most importantly the admin nickname.
+  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const submitGuest = (e) => {
     e?.preventDefault?.();
     const cleaned = (name || '').trim().slice(0, 16) || 'Rider';
     onSubmit({ provider: 'guest', id: `guest-${Date.now()}`, name: cleaned, profileImage: null });
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Some webviews block clipboard.writeText; user can long-press
+      // the address bar to copy as a fallback.
+    }
   };
 
   const submitKakao = async () => {
@@ -46,45 +76,44 @@ export default function Menu({ onSubmit }) {
   return (
     <div className="flex h-full w-full items-center justify-center overflow-y-auto py-4">
       <div className="w-full max-w-md overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-xl">
-        {/* Hero — full image at top, with a CSS mask fading the
-            bottom into transparency. The image is rendered at its
-            natural aspect (block w-full) so every detail of the
-            HORSERUN logo + horses is visible, while the lower
-            portion gradually disappears into the white card body
-            so the form area underneath sits on clean white. */}
         <img
           src="/login-hero.jpg"
           alt="Horserun"
           className="block w-full select-none"
           loading="eager"
           decoding="async"
-          style={{
-            WebkitMaskImage:
-              'linear-gradient(to bottom, black 0%, black 55%, transparent 100%)',
-            maskImage:
-              'linear-gradient(to bottom, black 0%, black 55%, transparent 100%)',
-          }}
         />
 
         <div className="px-6 pb-7 pt-3">
-          <div className="mb-3 flex items-center gap-2 text-ink-400">
-            <Sparkles size={14} />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">
-              Live race
-            </span>
+        {inApp && (
+          <div className="mt-6 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold">메신저 내장 브라우저 감지</div>
+              <div className="mt-0.5 text-amber-800">
+                여기서는 카카오 로그인이 막힐 수 있어요. Safari/Chrome으로 열거나
+                게스트로 시작하세요.
+              </div>
+              <button
+                type="button"
+                onClick={copyLink}
+                className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-200"
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? '복사됨' : '링크 복사'}
+              </button>
+            </div>
           </div>
-          <p className="text-sm leading-relaxed text-ink-400">
-            Alternate left and right taps to gallop. Land each tap inside the
-            green sweet zone (220–320ms apart) for full speed. Same-side taps
-            add nothing.
-          </p>
-
+        )}
         {kakaoOn && (
           <button
             type="button"
             onClick={submitKakao}
             disabled={busy}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-yellow-300 py-3.5 text-base font-semibold text-yellow-950 shadow-lg shadow-yellow-300/40 transition-transform active:scale-[0.99] disabled:opacity-60"
+            className={[
+              'flex w-full items-center justify-center gap-2 rounded-2xl bg-yellow-300 py-3.5 text-base font-semibold text-yellow-950 shadow-lg shadow-yellow-300/40 transition-transform active:scale-[0.99] disabled:opacity-60',
+              inApp ? 'mt-3' : 'mt-6',
+            ].join(' ')}
           >
             {busy ? (
               <Loader2 size={18} className="animate-spin" />
@@ -96,18 +125,14 @@ export default function Menu({ onSubmit }) {
         )}
 
         <form onSubmit={submitGuest}>
-          <label className="mt-4 block">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-              {kakaoOn ? 'Or play as guest' : 'Your name'}
-            </span>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value.slice(0, 16))}
-              placeholder="Rider"
-              className="mt-1.5 w-full rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 text-base font-medium text-ink-900 placeholder:text-ink-400 focus:border-ink-200 focus:bg-white focus:outline-none"
-            />
-          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value.slice(0, 16))}
+            placeholder="Rider"
+            aria-label="Player name"
+            className="mt-4 w-full rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 text-base font-medium text-ink-900 placeholder:text-ink-400 focus:border-ink-200 focus:bg-white focus:outline-none"
+          />
 
           <button
             type="submit"
