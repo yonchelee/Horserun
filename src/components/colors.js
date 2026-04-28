@@ -45,13 +45,4 @@ export const COLOR_MAP = {
     shadow: 'shadow-violet-500/40',
     hex: '#8b5cf6',
   },
-  fuchsia: {
-    bg: 'bg-fuchsia-500',
-    bgSoft: 'bg-fuchsia-100',
-    text: 'text-fuchsia-600',
-    border: 'border-fuchsia-300',
-    ring: 'ring-fuchsia-400',
-    shadow: 'shadow-fuchsia-500/40',
-    hex: '#d946ef',
-  },
 };

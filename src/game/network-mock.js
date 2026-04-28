@@ -9,10 +9,10 @@
 
 import { applyTap, tickHorse, rankHorses, makeHorse } from './engine.js';
 
-const MAX_PLAYERS = 6;
+const MAX_PLAYERS = 5;
 const COUNTDOWN_MS = 5_000;
 const POST_RACE_RESET_MS = 15_000;
-const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet', 'fuchsia'];
+const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet'];
 const BOT_NAMES = ['Comet', 'Shadow', 'Blitz', 'Vortex', 'Phoenix', 'Storm', 'Echo', 'Nova'];
 const PERSONALITIES = [
   { id: 'sprinter', baseInterval: 235, jitter: 0.12 },
