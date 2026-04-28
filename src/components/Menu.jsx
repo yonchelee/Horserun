@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Play, Sparkles, MessageCircle, Loader2 } from 'lucide-react';
+import { Play, MessageCircle, Loader2 } from 'lucide-react';
 import { isKakaoEnabled, loginWithKakao } from '../auth/kakao.js';
 
 // Menu doubles as the login screen. If a Kakao JS key is configured we
@@ -46,39 +46,15 @@ export default function Menu({ onSubmit }) {
   return (
     <div className="flex h-full w-full items-center justify-center overflow-y-auto py-4">
       <div className="w-full max-w-md overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-xl">
-        {/* Hero — full image at top, with a CSS mask fading the
-            bottom into transparency. The image is rendered at its
-            natural aspect (block w-full) so every detail of the
-            HORSERUN logo + horses is visible, while the lower
-            portion gradually disappears into the white card body
-            so the form area underneath sits on clean white. */}
         <img
           src="/login-hero.jpg"
           alt="Horserun"
           className="block w-full select-none"
           loading="eager"
           decoding="async"
-          style={{
-            WebkitMaskImage:
-              'linear-gradient(to bottom, black 0%, black 55%, transparent 100%)',
-            maskImage:
-              'linear-gradient(to bottom, black 0%, black 55%, transparent 100%)',
-          }}
         />
 
         <div className="px-6 pb-7 pt-3">
-          <div className="mb-3 flex items-center gap-2 text-ink-400">
-            <Sparkles size={14} />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">
-              Live race
-            </span>
-          </div>
-          <p className="text-sm leading-relaxed text-ink-400">
-            Alternate left and right taps to gallop. Land each tap inside the
-            green sweet zone (220–320ms apart) for full speed. Same-side taps
-            add nothing.
-          </p>
-
         {kakaoOn && (
           <button
             type="button"
@@ -96,18 +72,14 @@ export default function Menu({ onSubmit }) {
         )}
 
         <form onSubmit={submitGuest}>
-          <label className="mt-4 block">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-              {kakaoOn ? 'Or play as guest' : 'Your name'}
-            </span>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value.slice(0, 16))}
-              placeholder="Rider"
-              className="mt-1.5 w-full rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 text-base font-medium text-ink-900 placeholder:text-ink-400 focus:border-ink-200 focus:bg-white focus:outline-none"
-            />
-          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value.slice(0, 16))}
+            placeholder="Rider"
+            aria-label="Player name"
+            className="mt-4 w-full rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 text-base font-medium text-ink-900 placeholder:text-ink-400 focus:border-ink-200 focus:bg-white focus:outline-none"
+          />
 
           <button
             type="submit"
