@@ -13,14 +13,20 @@ export function createPartyNetwork({
   onFinished,
   onRejected,
 }) {
-  let identitySent = false;
   let serverClockOffset = 0; // serverNow - localNow at last broadcast
   let myConnId = null;
 
   const socket = new PartySocket({ host, room });
 
+  // Re-send identify on every 'open' event — including auto-reconnects.
+  // PartySocket fires 'open' on every underlying WS open, and the server's
+  // onConnect always allocates a fresh slot with name='Rider' (and
+  // isAdmin=false), so without re-identifying, a dropped/restored
+  // connection silently downgrades the player back to a default-named
+  // guest. The server's identify handler is idempotent (sets fields +
+  // broadcasts), so re-sending is safe.
   socket.addEventListener('open', () => {
-    if (identity && !identitySent) {
+    if (identity) {
       socket.send(
         JSON.stringify({
           type: 'identify',
@@ -29,7 +35,6 @@ export function createPartyNetwork({
           provider: identity.provider ?? 'guest',
         }),
       );
-      identitySent = true;
     }
   });
 
