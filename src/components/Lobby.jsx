@@ -41,10 +41,6 @@ export default function Lobby({ snapshot, myConnId, serverNow, onReady, onLeave,
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="rounded-full bg-yellow-100 px-2 py-1 font-mono text-[10px] text-yellow-900">
-              dbg: name=&quot;{youHorse?.name ?? 'null'}&quot; admin=
-              {youHorse ? (youHorse.isAdmin ? 'Y' : 'N') : 'no-horse'}
-            </span>
             {isAdmin && (
               <button
                 type="button"
