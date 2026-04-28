@@ -123,6 +123,16 @@ VITE_KAKAO_JS_KEY=발급받은_JS_KEY
 
 **카카오 로그인 팝업이 뜨자마자 닫힘** → 카카오 디벨로퍼스의 플랫폼 도메인에 현재 접속 도메인이 등록됐는지 확인.
 
+## 부하 검증 (load test)
+
+서버 변경 후 50명 동시 접속 회귀 검증:
+
+```bash
+npm run loadtest -- --n 50
+```
+
+자세한 옵션은 `tools/load-test/README.md` 참고.
+
 ## 6. 비용
 
 - **Cloudflare Workers 무료 티어**: 월 100,000 요청, 30 GB-s CPU 시간. 작은 멀티플레이 게임엔 충분합니다.

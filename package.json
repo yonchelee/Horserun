@@ -8,7 +8,8 @@
     "dev:party": "wrangler dev",
     "build": "vite build",
     "preview": "vite preview --host",
-    "deploy:party": "wrangler deploy"
+    "deploy:party": "wrangler deploy",
+    "loadtest": "node tools/load-test/validator.js"
   },
   "dependencies": {
     "lucide-react": "^0.395.0",
