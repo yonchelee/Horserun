@@ -24,6 +24,9 @@ export default function App() {
   // without waiting for the server's POST_RACE_RESET_MS auto-reset.
   // Reset whenever we transition into a new finished payload.
   const [resultsDismissed, setResultsDismissed] = useState(false);
+  // Set when the admin kicks us. Surfaced as a banner on the Menu
+  // screen; cleared on next successful login.
+  const [kickedMessage, setKickedMessage] = useState(null);
 
   const netRef = useRef(null);
   const now = performance.now();
@@ -34,6 +37,7 @@ export default function App() {
     setIdentity(id);
     setNetworkError(null);
     setFinalResult(null);
+    setKickedMessage(null);
 
     netRef.current?.destroy();
     const net = createNetwork({
@@ -52,6 +56,16 @@ export default function App() {
       },
       onRejected: (reason) => {
         setNetworkError(reason || 'Connection rejected');
+      },
+      onKicked: (reason) => {
+        // Admin removed us from the room. Tear the session down so
+        // the user sees the Menu again with a banner explaining why.
+        netRef.current?.destroy();
+        netRef.current = null;
+        setKickedMessage(reason || '방장이 내보냈습니다');
+        setIdentity(null);
+        setSnapshot(null);
+        setFinalResult(null);
       },
     });
     netRef.current = net;
@@ -94,6 +108,14 @@ export default function App() {
     >
       {!identity && (
         <div className="flex h-full w-full flex-col p-3">
+          {kickedMessage && (
+            <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
+              <div className="font-semibold">{kickedMessage}</div>
+              <div className="mt-0.5 text-xs text-red-500/80">
+                다른 닉네임으로 다시 입장할 수 있어요.
+              </div>
+            </div>
+          )}
           <Menu onSubmit={handleLogin} />
         </div>
       )}
@@ -113,6 +135,7 @@ export default function App() {
               onLeave={handleLogout}
               isAdmin={isAdmin}
               onReset={handleReset}
+              onKick={(connId) => netRef.current?.sendKick?.(connId)}
             />
           )}
         </div>

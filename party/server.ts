@@ -355,6 +355,40 @@ export class Main extends Server<Env> {
         this.broadcastState();
         break;
       }
+      case 'kick': {
+        // Admin removes a specific human from the room. Self-kick is
+        // blocked so an admin can't accidentally lock themselves out.
+        // Bots aren't kickable (no connection to close, and there's no
+        // user value in it).
+        if (!horse.isAdmin) break;
+        const targetConnId = msg.targetConnId;
+        if (typeof targetConnId !== 'string' || !targetConnId) break;
+        if (targetConnId === sender.id) break;
+        const target = this.horses.find(
+          (h) => h.connId === targetConnId && !h.isBot,
+        );
+        if (!target?.connId) break;
+        const targetConn = [...this.getConnections()].find(
+          (c) => c.id === targetConnId,
+        );
+        if (targetConn) {
+          try {
+            targetConn.send(
+              JSON.stringify({
+                type: 'kicked',
+                reason: '방장이 내보냈습니다',
+              }),
+            );
+          } catch {
+            // Connection may have closed mid-send; the close path
+            // below still runs via onClose.
+          }
+          targetConn.close(1000, 'kicked');
+        }
+        // We don't mutate horses[] here — onClose fires for the closed
+        // connection and handles bot replacement / persistence.
+        break;
+      }
       case 'ready': {
         if (this.phase !== 'lobby' && this.phase !== 'countdown') break;
         horse.ready = true;
@@ -618,6 +652,19 @@ export class Main extends Server<Env> {
     const youHorse = this.horses.find((h) => h.connId === connId) ?? null;
     const top = ranked.slice(0, VISIBLE_TOP_N).map((h) => this.shortHorse(h, rankOf.get(h.id)!));
     const summary = this.buildSummary();
+    // Admin-only: full list of human participants for the kick panel.
+    // Withheld from non-admins so connection IDs aren't leaked to
+    // anyone who can't act on them.
+    const humans = youHorse?.isAdmin
+      ? this.horses
+          .filter((h) => !h.isBot && h.connId)
+          .map((h) => ({
+            connId: h.connId,
+            name: h.name,
+            profileImage: h.profileImage ?? null,
+            isAdmin: !!h.isAdmin,
+          }))
+      : null;
 
     return {
       phase: this.phase,
@@ -630,6 +677,7 @@ export class Main extends Server<Env> {
       ...summary,
       you: youHorse ? this.fullHorse(youHorse, rankOf.get(youHorse.id)!) : null,
       top,
+      humans,
     };
   }
 
