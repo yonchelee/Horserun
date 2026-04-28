@@ -20,6 +20,10 @@ export default function App() {
   const [snapshot, setSnapshot] = useState(null);
   const [finalResult, setFinalResult] = useState(null);
   const [networkError, setNetworkError] = useState(null);
+  // Local dismissal flag so the player can leave the Results screen
+  // without waiting for the server's POST_RACE_RESET_MS auto-reset.
+  // Reset whenever we transition into a new finished payload.
+  const [resultsDismissed, setResultsDismissed] = useState(false);
 
   const netRef = useRef(null);
   const now = performance.now();
@@ -36,11 +40,15 @@ export default function App() {
       identity: id,
       onState: (state) => {
         setSnapshot(state);
-        if (state.phase === 'lobby') setFinalResult(null);
+        if (state.phase === 'lobby') {
+          setFinalResult(null);
+          setResultsDismissed(false);
+        }
       },
       onFinished: (payload) => {
         // payload = { top, you, startedAt, finishedAt }
         setFinalResult(payload);
+        setResultsDismissed(false);
       },
       onRejected: (reason) => {
         setNetworkError(reason || 'Connection rejected');
@@ -123,7 +131,7 @@ export default function App() {
         />
       )}
 
-      {identity && phase === 'finished' && finalResult && (
+      {identity && phase === 'finished' && finalResult && !resultsDismissed && (
         <div className="flex h-full w-full flex-col p-3">
           <Results
             top={finalResult.top}
@@ -131,7 +139,20 @@ export default function App() {
             startedAt={finalResult.startedAt}
             finishedAt={finalResult.finishedAt}
             totalCount={snapshot?.totalCount ?? 0}
-            onPlayAgain={() => netRef.current?.setReady(false)}
+            // Dismiss locally; server auto-resets to lobby on its own
+            // schedule. We don't send 'unready' (server ignores it
+            // during 'finished') — this is a pure UX action.
+            onPlayAgain={() => setResultsDismissed(true)}
+          />
+        </div>
+      )}
+
+      {identity && phase === 'finished' && (resultsDismissed || !finalResult) && (
+        <div className="flex h-full w-full flex-col p-3">
+          <PostRaceWait
+            resetAt={snapshot?.resetAt ?? null}
+            serverNow={() => netRef.current?.serverNow?.() ?? Date.now()}
+            onLeave={handleLogout}
           />
         </div>
       )}
@@ -266,4 +287,37 @@ function withMockFlags(p) {
       ? performance.now() + (p.qualityUntil - Date.now())
       : 0,
   };
+}
+
+
+function PostRaceWait({ resetAt, serverNow, onLeave }) {
+  const [now, setNow] = useState(() => serverNow?.() ?? Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(serverNow?.() ?? Date.now()), 200);
+    return () => clearInterval(id);
+  }, [serverNow]);
+  const remainingSec =
+    resetAt != null ? Math.max(0, Math.ceil((resetAt - now) / 1000)) : null;
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <div className="flex max-w-sm flex-col items-center gap-3 rounded-3xl border border-ink-100 bg-white px-6 py-7 text-center shadow-xl">
+        <Wifi className="animate-pulse text-ink-400" />
+        <div>
+          <div className="text-base font-semibold text-ink-900">Returning to lobby…</div>
+          <div className="mt-1 text-xs text-ink-400">
+            {remainingSec != null
+              ? `Next race opens in ${remainingSec}s`
+              : 'Waiting for the next race to open…'}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onLeave}
+          className="mt-2 rounded-full bg-ink-50 px-3 py-1 text-xs font-medium text-ink-400 hover:bg-ink-100"
+        >
+          Leave
+        </button>
+      </div>
+    </div>
+  );
 }

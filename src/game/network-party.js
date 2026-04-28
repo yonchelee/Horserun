@@ -59,7 +59,11 @@ export function createPartyNetwork({
       onState && onState(msg.state);
       onFinished &&
         onFinished({
-          ranking: msg.ranking,
+          // Server now sends `top` (rank-ordered top 5) and `you` (full
+          // player projection with rank) instead of the old full
+          // `ranking` array. Match the contract Results.jsx expects.
+          top: msg.top,
+          you: msg.you,
           startedAt: msg.startedAt,
           finishedAt: msg.finishedAt,
         });
