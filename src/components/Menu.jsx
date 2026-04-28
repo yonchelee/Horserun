@@ -22,7 +22,12 @@ function isInAppBrowser() {
 export default function Menu({ onSubmit }) {
   const kakaoOn = isKakaoEnabled();
   const inApp = kakaoOn && isInAppBrowser();
-  const [name, setName] = useState('Rider');
+  // Empty by default so the visible "Rider" comes from the placeholder
+  // instead of being seeded into the input. If the user types over a
+  // pre-filled value without first clearing it, their typed text gets
+  // appended (e.g. "Rider홍길동"), which silently breaks any name that
+  // needs to match exactly — most importantly the admin nickname.
+  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
