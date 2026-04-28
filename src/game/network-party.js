@@ -12,6 +12,7 @@ export function createPartyNetwork({
   onState,
   onFinished,
   onRejected,
+  onKicked,
 }) {
   let serverClockOffset = 0; // serverNow - localNow at last broadcast
   let myConnId = null;
@@ -67,6 +68,11 @@ export function createPartyNetwork({
           startedAt: msg.startedAt,
           finishedAt: msg.finishedAt,
         });
+    } else if (msg.type === 'kicked') {
+      // Admin removed us from the room. Treat similarly to rejected
+      // but signal a separate reason so the UI can distinguish "방장이
+      // 내보냈습니다" from a generic connection failure.
+      onKicked && onKicked(msg.reason || '방장이 내보냈습니다');
     } else if (msg.type === 'rejected') {
       onRejected && onRejected(msg.reason || 'rejected');
     }
@@ -92,6 +98,12 @@ export function createPartyNetwork({
     sendReset() {
       // Server validates the sender is admin before honoring this.
       socket.send(JSON.stringify({ type: 'reset' }));
+    },
+    sendKick(targetConnId) {
+      // Server validates the sender is admin AND that the target is a
+      // human (not a bot) AND that the admin isn't kicking themselves.
+      if (!targetConnId) return;
+      socket.send(JSON.stringify({ type: 'kick', targetConnId }));
     },
     // serverNow() lets the UI render countdowns against the same clock the
     // server uses, eliminating drift caused by client-server clock skew.

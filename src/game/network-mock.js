@@ -325,6 +325,10 @@ export function createMockNetwork({ identity, onState, onFinished }) {
     setReady,
     sendTap,
     sendReset,
+    // No-op in solo mock: there are no other humans to kick. Surface
+    // is kept so the App doesn't have to branch on which network
+    // it's talking to.
+    sendKick: () => {},
     serverNow: () => Date.now(),
     myConnId: () => 'self',
     destroy,
