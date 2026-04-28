@@ -73,7 +73,16 @@ export default function App() {
     netRef.current?.sendTap(side);
   };
 
+  const handleReset = () => {
+    netRef.current?.sendReset?.();
+  };
+
   const phase = snapshot?.phase;
+  const myConnId = netRef.current?.myConnId?.() || null;
+  const myHorse = myConnId
+    ? snapshot?.horses?.find((h) => h.connId === myConnId)
+    : null;
+  const isAdmin = !!myHorse?.isAdmin;
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
@@ -101,11 +110,13 @@ export default function App() {
           ) : (
             <Lobby
               snapshot={snapshot}
-              myConnId={netRef.current?.myConnId?.() || null}
+              myConnId={myConnId}
               identity={identity}
               serverNow={() => netRef.current?.serverNow?.() ?? Date.now()}
               onReady={handleReady}
               onLeave={handleLogout}
+              isAdmin={isAdmin}
+              onReset={handleReset}
             />
           )}
         </div>
@@ -115,10 +126,12 @@ export default function App() {
         <GameScreen
           snapshot={snapshot}
           startedAt={snapshot.raceStartedAt}
-          myConnId={netRef.current?.myConnId?.() || null}
+          myConnId={myConnId}
           serverNow={() => netRef.current?.serverNow?.() ?? Date.now()}
           now={now}
           onTap={handleTap}
+          isAdmin={isAdmin}
+          onReset={handleReset}
         />
       )}
 
@@ -185,7 +198,7 @@ function ConnectionError({ reason, onLeave }) {
   );
 }
 
-function GameScreen({ snapshot, startedAt, myConnId, serverNow, now, onTap }) {
+function GameScreen({ snapshot, startedAt, myConnId, serverNow, now, onTap, isAdmin, onReset }) {
   // Stamp `isPlayer` on each horse from the connId so children that
   // were already written against the old single-player API (Track,
   // Horse, Leaderboard) keep working.
@@ -211,7 +224,16 @@ function GameScreen({ snapshot, startedAt, myConnId, serverNow, now, onTap }) {
           <Users size={12} />
           <span className="font-medium text-ink-900">{racerCount} racers</span>
         </div>
-        <div className="ml-auto rounded-full bg-ink-900 px-2.5 py-1 font-semibold uppercase tracking-wider text-white">
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="ml-auto rounded-full bg-red-100 px-2.5 py-1 font-semibold uppercase tracking-wider text-red-700 hover:bg-red-200"
+          >
+            초기화
+          </button>
+        )}
+        <div className={`${isAdmin ? '' : 'ml-auto'} rounded-full bg-ink-900 px-2.5 py-1 font-semibold uppercase tracking-wider text-white`}>
           Live
         </div>
       </div>

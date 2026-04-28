@@ -13,6 +13,7 @@ const MAX_PLAYERS = 5;
 const COUNTDOWN_MS = 5_000;
 const POST_RACE_RESET_MS = 15_000;
 const COLORS = ['rose', 'amber', 'emerald', 'sky', 'violet'];
+const ADMIN_NAME = '이영채1657';
 const BOT_NAMES = ['Comet', 'Shadow', 'Blitz', 'Vortex', 'Phoenix', 'Storm', 'Echo', 'Nova'];
 const PERSONALITIES = [
   { id: 'sprinter', baseInterval: 235, jitter: 0.12 },
@@ -57,6 +58,7 @@ function makeHumanSlot(lane, identity) {
   horse.isBot = false;
   horse.ready = false;
   horse.profileImage = identity?.profileImage ?? null;
+  horse.isAdmin = (identity?.name || '') === ADMIN_NAME;
   return horse;
 }
 
@@ -113,6 +115,7 @@ export function createMockNetwork({ identity, onState, onFinished }) {
       finished: h.finished,
       finishedAt: h.finishedAt,
       profileImage: h.profileImage ?? null,
+      isAdmin: !!h.isAdmin,
     };
   }
 
@@ -227,6 +230,16 @@ export function createMockNetwork({ identity, onState, onFinished }) {
     applyTap(human, side, Date.now());
   }
 
+  function sendReset() {
+    const human = horses.find((h) => !h.isBot);
+    if (!human?.isAdmin) return;
+    if (raf) cancelAnimationFrame(raf);
+    raf = null;
+    timers.forEach((t) => clearTimeout(t));
+    timers.clear();
+    initLobby();
+  }
+
   function destroy() {
     destroyed = true;
     if (raf) cancelAnimationFrame(raf);
@@ -241,6 +254,7 @@ export function createMockNetwork({ identity, onState, onFinished }) {
     identify: identifyFn,
     setReady,
     sendTap,
+    sendReset,
     serverNow: () => Date.now(),
     myConnId: () => 'self',
     destroy,

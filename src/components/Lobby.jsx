@@ -6,7 +6,7 @@ import { COLOR_MAP } from './colors.js';
 // countdownEndsAt) comes from the network; we just render it and
 // surface the Ready button.
 
-export default function Lobby({ snapshot, myConnId, serverNow, onReady, onLeave }) {
+export default function Lobby({ snapshot, myConnId, serverNow, onReady, onLeave, isAdmin, onReset }) {
   const horses = snapshot?.horses || [];
   const phase = snapshot?.phase || 'lobby';
   const countdownEndsAt = snapshot?.countdownEndsAt;
@@ -40,14 +40,25 @@ export default function Lobby({ snapshot, myConnId, serverNow, onReady, onLeave 
               Lobby · {readyCount}/{totalCount} ready
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onLeave}
-            className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-ink-400 hover:bg-ink-50"
-          >
-            <LogOut size={12} />
-            Leave
-          </button>
+          <div className="flex items-center gap-1">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="rounded-full bg-red-100 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-200"
+              >
+                강제 초기화
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onLeave}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-ink-400 hover:bg-ink-50"
+            >
+              <LogOut size={12} />
+              Leave
+            </button>
+          </div>
         </div>
 
         {/* Player list */}

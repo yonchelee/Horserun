@@ -80,6 +80,10 @@ export function createPartyNetwork({
     sendTap(side) {
       socket.send(JSON.stringify({ type: 'tap', side }));
     },
+    sendReset() {
+      // Server validates the sender is admin before honoring this.
+      socket.send(JSON.stringify({ type: 'reset' }));
+    },
     // serverNow() lets the UI render countdowns against the same clock the
     // server uses, eliminating drift caused by client-server clock skew.
     serverNow() {
