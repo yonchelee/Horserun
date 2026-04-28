@@ -20,7 +20,10 @@ export default function Horse({ horse, isPlayer }) {
           // horse only shifted by ~pct% of its own ~100px content width
           // and never reached the finish line.
           left: `calc(${pct}% + 4px)`,
-          transition: 'left 80ms linear',
+          // 100ms matches the server tick (10Hz) so position updates
+          // animate continuously between snapshots — CSS transition
+          // is doing our lerp for us.
+          transition: 'left 100ms linear',
         }}
       >
         <div className="flex items-center gap-1.5">
@@ -46,7 +49,7 @@ export default function Horse({ horse, isPlayer }) {
               <span
                 className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 rounded-full ${c.bg} px-1.5 py-px text-[9px] font-bold leading-tight text-white shadow ring-1 ring-white/80`}
               >
-                {horse.lane + 1}
+                {horse.rank ? `#${horse.rank}` : horse.lane + 1}
               </span>
             </span>
           </div>

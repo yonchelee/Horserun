@@ -9,12 +9,13 @@ import Controls from './components/Controls.jsx';
 import Results from './components/Results.jsx';
 
 import { createNetwork, isMultiplayerEnabled } from './game/network.js';
+import { buildVisibleSlots, buildLeaderboardList, YOU_COLOR } from './game/visible.js';
 
 export default function App() {
   // Local UI state (unrelated to server phase):
   //  - identity: who am I (kakao or guest); null until logged in
   //  - snapshot: latest snapshot from network (null until first emit)
-  //  - finalRanking: snapshot of the ranking + race times when finished
+  //  - finalResult: the server's `finished` payload (top + you + times)
   const [identity, setIdentity] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [finalResult, setFinalResult] = useState(null);
@@ -35,20 +36,11 @@ export default function App() {
       identity: id,
       onState: (state) => {
         setSnapshot(state);
-        // When the server cycles back to lobby after a race, clear the
-        // stale results screen.
         if (state.phase === 'lobby') setFinalResult(null);
       },
-      onFinished: ({ ranking, startedAt, finishedAt }) => {
-        const myId = netRef.current?.myConnId?.() || null;
-        setFinalResult({
-          ranking: ranking.map((h) => ({
-            ...h,
-            isPlayer: myId ? h.connId === myId : !h.isBot,
-          })),
-          startedAt,
-          finishedAt,
-        });
+      onFinished: (payload) => {
+        // payload = { top, you, startedAt, finishedAt }
+        setFinalResult(payload);
       },
       onRejected: (reason) => {
         setNetworkError(reason || 'Connection rejected');
@@ -78,11 +70,8 @@ export default function App() {
   };
 
   const phase = snapshot?.phase;
-  const myConnId = netRef.current?.myConnId?.() || null;
-  const myHorse = myConnId
-    ? snapshot?.horses?.find((h) => h.connId === myConnId)
-    : null;
-  const isAdmin = !!myHorse?.isAdmin;
+  const you = snapshot?.you ?? null;
+  const isAdmin = !!you?.isAdmin;
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
@@ -110,8 +99,7 @@ export default function App() {
           ) : (
             <Lobby
               snapshot={snapshot}
-              myConnId={myConnId}
-              identity={identity}
+              you={you}
               serverNow={() => netRef.current?.serverNow?.() ?? Date.now()}
               onReady={handleReady}
               onLeave={handleLogout}
@@ -125,8 +113,8 @@ export default function App() {
       {identity && phase === 'racing' && snapshot && (
         <GameScreen
           snapshot={snapshot}
+          you={you}
           startedAt={snapshot.raceStartedAt}
-          myConnId={myConnId}
           serverNow={() => netRef.current?.serverNow?.() ?? Date.now()}
           now={now}
           onTap={handleTap}
@@ -138,8 +126,11 @@ export default function App() {
       {identity && phase === 'finished' && finalResult && (
         <div className="flex h-full w-full flex-col p-3">
           <Results
-            ranking={finalResult.ranking}
+            top={finalResult.top}
+            you={finalResult.you}
             startedAt={finalResult.startedAt}
+            finishedAt={finalResult.finishedAt}
+            totalCount={snapshot?.totalCount ?? 0}
             onPlayAgain={() => netRef.current?.setReady(false)}
           />
         </div>
@@ -198,18 +189,16 @@ function ConnectionError({ reason, onLeave }) {
   );
 }
 
-function GameScreen({ snapshot, startedAt, myConnId, serverNow, now, onTap, isAdmin, onReset }) {
-  // Stamp `isPlayer` on each horse from the connId so children that
-  // were already written against the old single-player API (Track,
-  // Horse, Leaderboard) keep working.
-  const horses = snapshot.horses.map((h) => ({
-    ...h,
-    isPlayer: myConnId ? h.connId === myConnId : !h.isBot,
-  }));
-  const player = horses.find((h) => h.isPlayer);
+function GameScreen({ snapshot, you, startedAt, serverNow, now, onTap, isAdmin, onReset }) {
+  // Build the 5-lane visible slot array (you in the center, top racers
+  // around). The server-side `top` is already rank-ordered.
+  const slots = buildVisibleSlots(you, snapshot.top).filter(Boolean);
+  const leaderboardList = buildLeaderboardList(you, snapshot.top);
+
   // Use serverNow to keep the timer in sync across all clients.
   const elapsed = startedAt ? Math.max(0, (serverNow() - startedAt) / 1000) : 0;
-  const racerCount = horses.length;
+  const totalCount = snapshot.totalCount ?? slots.length;
+  const finishedCount = snapshot.finishedCount ?? 0;
 
   return (
     <div className="relative flex h-full w-full flex-col gap-2 p-2">
@@ -222,8 +211,16 @@ function GameScreen({ snapshot, startedAt, myConnId, serverNow, now, onTap, isAd
         </div>
         <div className="flex items-center gap-1.5 rounded-full border border-ink-100 bg-white px-2.5 py-1 shadow-sm">
           <Users size={12} />
-          <span className="font-medium text-ink-900">{racerCount} racers</span>
+          <span className="font-medium text-ink-900">
+            {finishedCount}/{totalCount}
+          </span>
         </div>
+        {you?.rank ? (
+          <div className="flex items-center gap-1.5 rounded-full border border-ink-100 bg-white px-2.5 py-1 shadow-sm">
+            <span className="font-mono text-[10px] text-ink-400">RANK</span>
+            <span className="font-bold text-ink-900">#{you.rank}</span>
+          </div>
+        ) : null}
         {isAdmin && (
           <button
             type="button"
@@ -239,18 +236,18 @@ function GameScreen({ snapshot, startedAt, myConnId, serverNow, now, onTap, isAd
       </div>
 
       <div className="relative min-h-0 flex-[3]">
-        <Track horses={horses} />
+        <Track horses={slots} />
       </div>
 
       <div className="h-10 shrink-0">
-        <Leaderboard horses={horses} />
+        <Leaderboard entries={leaderboardList} />
       </div>
 
       <div className="min-h-0 flex-[2]">
         <Controls
-          player={player ? withMockFlags(player) : null}
+          player={you ? withMockFlags({ ...you, color: YOU_COLOR }) : null}
           onTap={onTap}
-          disabled={!player}
+          disabled={!you}
           now={now}
         />
       </div>
