@@ -368,6 +368,20 @@ export class Main extends Server<Env> {
           (h) => h.connId === targetConnId && !h.isBot,
         );
         if (!target?.connId) break;
+
+        // Find the live WebSocket for this connId. With hibernation +
+        // long-lived rooms, a horse can be a "zombie" — its connId is
+        // still in this.horses[] (persisted from a previous session,
+        // or because onClose missed) but no live WS is attached. In
+        // that case getConnections() won't return it; if we only do
+        // best-effort send/close we'd silently no-op and the zombie
+        // would stay forever in the room from the admin's POV.
+        //
+        // Strategy: ALWAYS evict the horse synchronously here. If
+        // there is a live WS, also send 'kicked' + close (the client
+        // shows a banner; close + PR #8 client-side disable-reconnect
+        // does the rest). If there isn't, the eviction itself is what
+        // unsticks the room.
         const targetConn = [...this.getConnections()].find(
           (c) => c.id === targetConnId,
         );
@@ -380,13 +394,40 @@ export class Main extends Server<Env> {
               }),
             );
           } catch {
-            // Connection may have closed mid-send; the close path
-            // below still runs via onClose.
+            // Connection may have closed mid-send; the eviction below
+            // still happens.
           }
-          targetConn.close(1000, 'kicked');
+          try {
+            targetConn.close(1000, 'kicked');
+          } catch {
+            // ignore — eviction below handles state cleanup.
+          }
         }
-        // We don't mutate horses[] here — onClose fires for the closed
-        // connection and handles bot replacement / persistence.
+
+        // Evict the slot regardless of WS state. Mirror the same
+        // "human → bot" conversion that onClose does so the room
+        // looks identical whether the kick came via live close or
+        // zombie cleanup.
+        target.connId = null;
+        target.isBot = true;
+        target.ready = true;
+        target.profileImage = null;
+        target.isAdmin = false;
+        target.name = shuffled(BOT_NAMES)[0];
+        target.personality = shuffled(BOT_PERSONALITIES)[0];
+        target.aiNextTapIn = 80 + Math.random() * 220;
+
+        const stillHasHumans = this.horses.some(
+          (h) => !h.isBot && h.connId,
+        );
+        if (!stillHasHumans) {
+          this.initLobby();
+        } else if (this.phase === 'lobby') {
+          this.refillBotsToMin();
+        }
+
+        await this.persist();
+        this.broadcastState();
         break;
       }
       case 'ready': {
